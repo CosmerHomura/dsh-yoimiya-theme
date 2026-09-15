@@ -1318,7 +1318,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
     // 构建立即版本标记：面板上显示出来，这样"跑的是哪一版"一眼可判。
     // 起因是反复出现"改了但界面没变"——而客户端与 Host 半边的生效代价不同
     // （前者刷新、后者必须完全重启），没有标记就只能靠猜。
-    const BUILD_TAG = 'v30';
+    const BUILD_TAG = 'v31';
 
     const PARTICLE_KEY = 'dsh-yoimiya-particles-v1';
     const PARTICLE_DEFAULT = { on: true, speed: 1, density: 1, burst: 1 };

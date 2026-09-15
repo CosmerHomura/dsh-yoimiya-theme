@@ -92,6 +92,49 @@ async function listSongs() {
   return songs;
 }
 
+// 插件自己把曲库目录建出来，并放一份说明——用户不需要先去找路径、猜命名规则。
+// 这就是「内置并初始化」：装上就有，打开音乐面板就能看到它在哪。
+const MUSIC_README = `
+宵宫主题 · 本地曲库
+====================
+
+这个文件夹本身就是曲库，没有清单文件需要维护。
+
+一首歌 = 一个音频文件，例如：
+    宵宫的小曲.mp3
+
+封面可选，做成同名图片即可，例如：
+    宵宫的小曲.jpg
+
+文件名（去掉扩展名）就是显示的曲名，所以起个好名字就是好曲名。
+
+支持的音频：mp3 m4a aac ogg opus wav flac webm
+支持的图片：jpg jpeg png webp gif avif
+
+也可以完全不用手放：点主题右下角的音乐按钮 → 添加歌曲，
+在弹窗里拖入歌曲与封面。封面会先经过裁切，统一输出 512×512 的方图，
+这样列表里的缩略图尺寸一致。
+
+两种方式效果完全一样。
+`;
+
+async function initMusicDir() {
+  try {
+    await mkdir(MUSIC_DIR, { recursive: true });
+    const readme = join(MUSIC_DIR, 'README.txt');
+    // 只在缺失时写：用户可能自己改过这份说明，不该覆盖
+    try {
+      await stat(readme);
+    } catch {
+      await writeFile(readme, MUSIC_README, 'utf8');
+    }
+    return true;
+  } catch (err) {
+    console.warn('[yoimiya-theme] 曲库目录初始化失败：', err?.message ?? err);
+    return false;
+  }
+}
+
 function readBody(req, limit) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -304,6 +347,12 @@ export default {
       console.warn(`[yoimiya-theme] 路由 ${MUSIC_ROOT}/file 已被其他实例占用，跳过:`, e?.message ?? e);
     }
 
-    console.log(`[yoimiya-theme] Host 半边就绪（${registered}/${ROUTES.length + 4} 条路由），曲库目录 ${MUSIC_DIR}`);
+    // 初始化在注册之后做，且不 await：目录建不出来也不该拖住插件加载
+    void initMusicDir().then((ready) => {
+      console.log(
+        `[yoimiya-theme] Host 半边就绪（${registered}/${ROUTES.length + 4} 条路由）`
+        + `，曲库目录 ${MUSIC_DIR}${ready ? '（已就绪）' : '（初始化失败，见上方告警）'}`,
+      );
+    });
   },
 };

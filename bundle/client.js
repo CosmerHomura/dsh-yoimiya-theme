@@ -1978,17 +1978,38 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-crop-hint { color: #7C6A56; }
           });
         };
 
+        // 曲库接口在 Host 半边，而 Host 半边的模块被 Node 按 URL 缓存——
+        // 改过 host.js 之后，重组和刷新都不会重新读它，只有完全重启 DSH 才会。
+        // 所以这里必须把「需要重启」直接说出来：404/405 都是这个原因，
+        // DSH 的 frontend-static 兜底对 GET 回 404、对非 GET 回 405。
+        const NEEDS_RESTART = '曲库接口未注册 —— 改动过 Host 半边后需要完全重启 DSH 才会生效';
+
         const refresh = async () => {
+          let res;
           try {
-            const res = await fetch('/yoimiya-music/list', { cache: 'no-store' });
-            const r = await res.json();
-            songs = Array.isArray(r.songs) ? r.songs : [];
-            if (typeof r.dir === 'string') dir = r.dir;
-            render();
+            res = await fetch('/yoimiya-music/list', { cache: 'no-store' });
           } catch {
             songs = [];
-            listEl.textContent = '曲库接口不可达';
+            listEl.textContent = '曲库接口不可达（请求发不出去）';
+            return;
           }
+          const text = await res.text().catch(() => '');
+          let r = null;
+          try {
+            r = JSON.parse(text);
+          } catch {
+            r = null;
+          }
+          if (r === null) {
+            songs = [];
+            listEl.textContent = (res.status === 404 || res.status === 405)
+              ? NEEDS_RESTART
+              : ('曲库接口异常：HTTP ' + res.status);
+            return;
+          }
+          songs = Array.isArray(r.songs) ? r.songs : [];
+          if (typeof r.dir === 'string') dir = r.dir;
+          render();
         };
 
         // 失败必须说清是哪一种：路由未注册时请求会落到 DSH 的 404，而它的
@@ -2010,10 +2031,10 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-crop-hint { color: #7C6A56; }
             parsed = null;
           }
           if (parsed === null) {
-            return {
-              ok: false,
-              detail: 'HTTP ' + res.status + ' 且响应不是 JSON（空响应＝路由没注册）',
-            };
+            const why = res.status === 404 || res.status === 405
+              ? '（空响应＝路由没注册；改动过 Host 半边后需要完全重启 DSH）'
+              : '（响应不是 JSON）';
+            return { ok: false, detail: 'HTTP ' + res.status + ' ' + why };
           }
           if (res.ok !== true || parsed.ok !== true) {
             return { ok: false, detail: 'HTTP ' + res.status + ' · ' + (parsed.reason ?? '未知原因') };

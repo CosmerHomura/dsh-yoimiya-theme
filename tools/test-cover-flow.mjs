@@ -161,12 +161,10 @@ drop.fire('drop', {
 });
 await new Promise((r) => setTimeout(r, 40));
 
-const cropBack = findByClass(body, 'dsh-yoimiya-crop-back');
-console.log('  裁切弹窗 data-open:', cropBack.dataset.open);
-
-if (cropBack.dataset.open === 'true') {
-  const confirm = findByText(cropBack, '使用这张');
-  console.log('  确认按钮:', confirm !== null);
+// 合并后：同一个弹窗内切换视图，找裁切视图的确认按钮
+const confirm = findByText(coverDialog, '使用这张');
+console.log('  裁切视图确认按钮:', confirm !== null, confirm ? '(hidden=' + confirm.hidden + ')' : '');
+if (confirm !== null) {
   confirm.click();
   await new Promise((r) => setTimeout(r, 60));
   console.log('  确认后封面弹窗:', coverBack.dataset.open);

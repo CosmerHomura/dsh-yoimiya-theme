@@ -1242,7 +1242,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
       // 构建立即版本标记：面板上显示出来，这样"跑的是哪一版"一眼可判。
       // 起因是反复出现"改了但界面没变"——而客户端与 Host 半边的生效代价不同
       // （前者刷新、后者必须完全重启），没有标记就只能靠猜。
-      const BUILD_TAG = 'v26';
+      const BUILD_TAG = 'v27';
 
       const PARTICLE_KEY = 'dsh-yoimiya-particles-v1';
       const PARTICLE_DEFAULT = { on: true, speed: 1, density: 1, burst: 1 };
@@ -1743,18 +1743,17 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
             && typeof document.createElement('canvas').getContext === 'function',
         };
       }
-      /**
-       * 更换封面对话框。
+            /**
+       * 设置封面：拖放区与裁切在【同一个弹窗内】切换视图。
        *
-       * 【为什么单独做一个弹窗，而不是让列表里的缩略图直接触发文件选择器】
-       * 缩略图那条路依赖 `<input type=file>` 的 change 事件，实测在真实环境里
-       * 选择文件后事件没有触发到处理函数，表现是「选择界面关闭后就没反应」，
-       * 而模拟测试跑通、无法复现。于是改用与「添加歌曲」完全相同的拖放区
-       * 模式：那条路已经被实际使用验证过（拖入文件可以工作）。
-       *
-       * 拖入与点击两条路都保留，拖入是主路径。
+       * 原先做成两层弹窗（封面弹窗里再开裁切弹窗），结果两者各持一份状态与
+       * 一个 Promise：裁切结束后封面弹窗的提示会重新出现，且两个模态的行为
+       * 叠在一起难以推理。合并成一个之后：
+       *   · 只有一份状态、一次 Promise，没有跨组件的 resolver
+       *   · 用户看到的是一个连续的流程：拖入 → 裁切 → 使用这张 → 完成
+       *   · 任何一步都不需要"关闭一个弹窗再回到另一个"
        */
-      function createCoverDialog(crop, onSubmit) {
+      function createCoverDialog(onSubmit) {
         const back = document.createElement('div');
         back.className = 'dsh-yoimiya-modal-back';
         back.dataset.open = 'false';
@@ -1772,27 +1771,29 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
         const target = document.createElement('div');
         target.className = 'dsh-yoimiya-cover-for';
 
+        // ── 视图一：选择图片 ──
+        const pickView = document.createElement('div');
         const zone = document.createElement('div');
         zone.className = 'dsh-yoimiya-drop';
         zone.dataset.zone = 'cover';
         zone.tabIndex = 0;
         zone.setAttribute('role', 'button');
-        zone.setAttribute('aria-label', '封面（必须）');
+        zone.setAttribute('aria-label', '封面图片（必须）');
 
         const head = document.createElement('div');
         head.className = 'dsh-yoimiya-drop-head';
-        const name = document.createElement('span');
-        name.className = 'dsh-yoimiya-drop-label';
-        name.textContent = '封面图片';
+        const nameEl = document.createElement('span');
+        nameEl.className = 'dsh-yoimiya-drop-label';
+        nameEl.textContent = '封面图片';
         const badge = document.createElement('span');
         badge.className = 'dsh-yoimiya-drop-badge';
         badge.dataset.required = 'true';
         badge.textContent = '必须';
-        head.append(name, badge);
+        head.append(nameEl, badge);
 
         const hint = document.createElement('div');
         hint.className = 'dsh-yoimiya-drop-hint';
-        hint.textContent = '拖入图片，或点击选择（选好后会进入裁切）';
+        hint.textContent = '拖入图片，或点击选择';
 
         const picker = document.createElement('input');
         picker.type = 'file';
@@ -1800,6 +1801,41 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
         picker.className = 'dsh-yoimiya-music-picker';
 
         zone.append(head, hint, picker);
+        pickView.append(zone);
+
+        // ── 视图二：裁切 ──
+        const cropView = document.createElement('div');
+        cropView.hidden = true;
+        const stage = document.createElement('div');
+        stage.className = 'dsh-yoimiya-crop-stage';
+        const view = document.createElement('canvas');
+        view.className = 'dsh-yoimiya-crop-canvas';
+        view.width = CROP_FRAME;
+        view.height = CROP_FRAME;
+        view.tabIndex = 0;
+        view.setAttribute('role', 'img');
+        view.setAttribute('aria-label', '裁切取景框');
+        stage.append(view);
+
+        const zoomRow = document.createElement('div');
+        zoomRow.className = 'dsh-yoimiya-crop-zoom';
+        const zoomLabel = document.createElement('span');
+        zoomLabel.className = 'dsh-yoimiya-dock-label';
+        zoomLabel.textContent = '缩放';
+        const zoom = document.createElement('input');
+        zoom.type = 'range';
+        zoom.min = '100';
+        zoom.max = '400';
+        zoom.value = '100';
+        zoom.className = 'dsh-yoimiya-crop-range';
+        zoom.setAttribute('aria-label', '缩放');
+        zoomRow.append(zoomLabel, zoom);
+
+        const cropHint = document.createElement('div');
+        cropHint.className = 'dsh-yoimiya-crop-hint';
+        cropHint.textContent = '拖动调整位置 · 滚轮或滑块缩放 · 输出 ' + COVER_SIZE + '×' + COVER_SIZE;
+
+        cropView.append(stage, zoomRow, cropHint);
 
         const error = document.createElement('div');
         error.className = 'dsh-yoimiya-modal-error';
@@ -1811,60 +1847,130 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
         cancel.type = 'button';
         cancel.className = 'dsh-yoimiya-modal-btn';
         cancel.textContent = '取消';
-        actions.append(cancel);
+        const confirm = document.createElement('button');
+        confirm.type = 'button';
+        confirm.className = 'dsh-yoimiya-modal-btn dsh-yoimiya-modal-primary';
+        confirm.textContent = '使用这张';
+        confirm.hidden = true;
+        actions.append(cancel, confirm);
 
-        box.append(title, target, zone, error, actions);
+        box.append(title, target, pickView, cropView, error, actions);
         back.append(box);
 
-        let current = null;
+        // 裁切的全部状态都在这里，没有第二份
+        let song = null;
+        let img = null;
+        let base = 1;
+        let zoomV = 1;
+        let ox = 0;
+        let oy = 0;
+        let url = null;
         let busy = false;
+        let dragging = false;
+        let lastX = 0;
+        let lastY = 0;
 
-        const setHint = (text, filled) => {
-          hint.textContent = text;
-          zone.dataset.filled = String(filled);
+        const clampPan = () => {
+          if (img === null) return;
+          const w = img.width * base * zoomV;
+          const h = img.height * base * zoomV;
+          const maxX = Math.max(0, (w - CROP_FRAME) / 2);
+          const maxY = Math.max(0, (h - CROP_FRAME) / 2);
+          ox = Math.min(maxX, Math.max(-maxX, ox));
+          oy = Math.min(maxY, Math.max(-maxY, oy));
         };
 
-        // 选中文件后立刻进裁切，然后上传——中间不插入第二个确认步骤，
-        // 因为裁切弹窗本身就是那一步确认。
-        const accept = async (file) => {
-          if (file === undefined || file === null || current === null || busy) return;
-          busy = true;
+        const draw = () => {
+          if (img === null) return;
+          clampPan();
+          const g = typeof view.getContext === 'function' ? view.getContext('2d') : null;
+          if (g === null) return;
+          const dpr = Math.min(window.devicePixelRatio || 1, 2);
+          view.width = CROP_FRAME * dpr;
+          view.height = CROP_FRAME * dpr;
+          g.setTransform(dpr, 0, 0, dpr, 0, 0);
+          g.clearRect(0, 0, CROP_FRAME, CROP_FRAME);
+          const w = img.width * base * zoomV;
+          const h = img.height * base * zoomV;
+          g.drawImage(img, CROP_FRAME / 2 - w / 2 + ox, CROP_FRAME / 2 - h / 2 + oy, w, h);
+        };
+
+        const renderBlob = () => new Promise((resolve) => {
+          const out = document.createElement('canvas');
+          out.width = COVER_SIZE;
+          out.height = COVER_SIZE;
+          const g = typeof out.getContext === 'function' ? out.getContext('2d') : null;
+          if (g === null || typeof out.toBlob !== 'function' || img === null) {
+            resolve(null);
+            return;
+          }
+          const k = COVER_SIZE / CROP_FRAME;
+          const w = img.width * base * zoomV * k;
+          const h = img.height * base * zoomV * k;
+          g.drawImage(img, COVER_SIZE / 2 - w / 2 + ox * k, COVER_SIZE / 2 - h / 2 + oy * k, w, h);
+          out.toBlob((blob) => resolve(blob), 'image/webp', 0.9);
+        });
+
+        const releaseUrl = () => {
+          if (url !== null && typeof URL.revokeObjectURL === 'function') URL.revokeObjectURL(url);
+          url = null;
+        };
+
+        const showPick = () => {
+          pickView.hidden = false;
+          cropView.hidden = true;
+          confirm.hidden = true;
+          hint.textContent = '拖入图片，或点击选择';
+          zone.dataset.filled = 'false';
+          zone.dataset.over = 'false';
+          img = null;
+          releaseUrl();
+        };
+
+        const showCrop = (image, fileName) => {
+          img = image;
+          base = Math.max(CROP_FRAME / image.width, CROP_FRAME / image.height);
+          zoomV = 1;
+          ox = 0;
+          oy = 0;
+          zoom.value = '100';
+          pickView.hidden = true;
+          cropView.hidden = false;
+          confirm.hidden = false;
+          title.textContent = '裁切封面';
+          draw();
+          void fileName;
+        };
+
+        const choose = (file) => {
+          if (file === undefined || file === null || song === null || busy) return;
           error.hidden = true;
-          if (!crop.isUsable()) {
-            busy = false;
+          if (typeof Image !== 'function' || typeof URL === 'undefined' || URL === null
+              || typeof URL.createObjectURL !== 'function') {
             error.hidden = false;
             error.textContent = '当前环境不支持裁切，无法统一封面尺寸';
             return;
           }
-          setHint(file.name + ' · 裁切中…', true);
-          const cropped = await crop.open(file);
-          if (cropped === null) {
-            busy = false;
-            setHint('已取消裁切，可重新拖入', false);
-            return;
-          }
-          setHint(file.name + ' · 上传中…', false);
-          try {
-            await onSubmit(current, cropped);
-          } catch (err) {
-            busy = false;
+          hint.textContent = '正在载入 ' + file.name + '…';
+          zone.dataset.filled = 'true';
+          releaseUrl();
+          url = URL.createObjectURL(file);
+          const image = new Image();
+          image.onload = () => showCrop(image, file.name);
+          image.onerror = () => {
             error.hidden = false;
-            error.textContent = '上传失败：' + (err?.message ?? '未知原因');
-            setHint('上传失败，可重试', false);
-            return;
-          }
-          busy = false;
-          back.dataset.open = 'false';
-          setHint('拖入图片，或点击选择（选好后会进入裁切）', false);
+            error.textContent = '这张图片读不出来（格式不支持？）';
+            showPick();
+          };
+          image.src = url;
         };
 
         picker.addEventListener('change', () => {
           const list = picker.files;
           const file = list !== undefined && list !== null && list.length > 0 ? list[0] : null;
           picker.value = '';
-          void accept(file);
+          choose(file);
         });
-
         zone.addEventListener('click', () => {
           if (typeof picker.click === 'function') picker.click();
         });
@@ -1878,39 +1984,126 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
           e.preventDefault();
           zone.dataset.over = 'true';
         });
-        zone.addEventListener('dragleave', () => {
-          zone.dataset.over = 'false';
-        });
+        zone.addEventListener('dragleave', () => { zone.dataset.over = 'false'; });
         zone.addEventListener('drop', (e) => {
           e.preventDefault();
           zone.dataset.over = 'false';
           const dt = e.dataTransfer;
-          void accept(dt === undefined || dt === null || dt.files === undefined || dt.files === null ? null : dt.files[0]);
+          choose(dt === undefined || dt === null || dt.files === undefined || dt.files === null ? null : dt.files[0]);
         });
 
-        cancel.addEventListener('click', () => {
+        const onDown = (e) => {
+          if (img === null) return;
+          dragging = true;
+          lastX = e.clientX;
+          lastY = e.clientY;
+          view.dataset.dragging = 'true';
+        };
+        const onMove = (e) => {
+          if (!dragging || img === null) return;
+          ox += e.clientX - lastX;
+          oy += e.clientY - lastY;
+          lastX = e.clientX;
+          lastY = e.clientY;
+          draw();
+        };
+        const onUp = () => {
+          dragging = false;
+          view.dataset.dragging = 'false';
+        };
+        view.addEventListener('pointerdown', onDown);
+        view.addEventListener('pointermove', onMove);
+        view.addEventListener('pointerup', onUp);
+        view.addEventListener('pointercancel', onUp);
+        view.addEventListener('wheel', (e) => {
+          if (img === null) return;
+          e.preventDefault();
+          const next = Math.min(400, Math.max(100, Number(zoom.value) + (e.deltaY < 0 ? 10 : -10)));
+          zoom.value = String(next);
+          zoomV = next / 100;
+          draw();
+        }, { passive: false });
+        zoom.addEventListener('input', () => {
+          zoomV = Number(zoom.value) / 100;
+          draw();
+        });
+        view.addEventListener('keydown', (e) => {
+          const step = e.shiftKey ? 16 : 4;
+          if (e.key === 'ArrowLeft') ox -= step;
+          else if (e.key === 'ArrowRight') ox += step;
+          else if (e.key === 'ArrowUp') oy -= step;
+          else if (e.key === 'ArrowDown') oy += step;
+          else return;
+          e.preventDefault();
+          draw();
+        });
+
+        const close = () => {
           back.dataset.open = 'false';
           error.hidden = true;
-          setHint('拖入图片，或点击选择（选好后会进入裁切）', false);
-        });
-        box.addEventListener('click', (e) => e.stopPropagation());
+          box.removeEventListener('click', stopClick);
+          window.removeEventListener('dragover', guard, true);
+          window.removeEventListener('drop', guard, true);
+        };
+        const stopClick = (e) => e.stopPropagation();
+        // 弹窗打开期间拦住页面其它地方的拖放：DSH 的输入框自己接收拖入的文件
+        // （会变成附件），拖到页面上任何非拖放区的位置都可能被它接走。
+        const guard = (e) => {
+          const t = e.target;
+          if (t !== null && t !== undefined && typeof box.contains === 'function' && box.contains(t)) return;
+          e.preventDefault();
+          e.stopPropagation();
+        };
 
-        const open = (song) => {
-          current = song;
+        const open = (forSong) => {
+          song = forSong;
           busy = false;
           error.hidden = true;
-          target.textContent = song.title;
-          setHint('拖入图片，或点击选择（选好后会进入裁切）', false);
+          target.textContent = forSong.title;
+          title.textContent = '设置封面';
+          showPick();
           back.dataset.open = 'true';
+          box.addEventListener('click', stopClick);
+          window.addEventListener('dragover', guard, true);
+          window.addEventListener('drop', guard, true);
         };
 
-        return {
-          node: back,
-          open,
-          close: () => { back.dataset.open = 'false'; },
-          isOpen: () => back.dataset.open === 'true',
-        };
+        cancel.addEventListener('click', close);
+
+        confirm.addEventListener('click', () => {
+          if (img === null || song === null || busy) return;
+          busy = true;
+          confirm.disabled = true;
+          confirm.textContent = '上传中…';
+          void renderBlob().then(async (blob) => {
+            if (blob === null) {
+              busy = false;
+              confirm.disabled = false;
+              confirm.textContent = '使用这张';
+              error.hidden = false;
+              error.textContent = '裁切结果生成失败，请重试';
+              return;
+            }
+            try {
+              await onSubmit(song, blob);
+            } catch (err) {
+              busy = false;
+              confirm.disabled = false;
+              confirm.textContent = '使用这张';
+              error.hidden = false;
+              error.textContent = '上传失败：' + (err?.message ?? '未知原因');
+              return;
+            }
+            busy = false;
+            confirm.disabled = false;
+            confirm.textContent = '使用这张';
+            close();
+          });
+        });
+
+        return { node: back, open, close, isOpen: () => back.dataset.open === 'true' };
       }
+
       function createAddDialog(crop, onSubmit) {
         const back = document.createElement('div');
         back.className = 'dsh-yoimiya-modal-back';
@@ -2399,7 +2592,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
 
         // 添加走弹窗：歌曲（必须）+ 封面（非必须），两个框都支持拖入文件
         const crop = createCropDialog();
-        const coverDialog = createCoverDialog(crop, async (song, blob) => {
+        const coverDialog = createCoverDialog(async (song, blob) => {
           const stem = String(song.audio).replace(/\.[^.]+$/, '');
           const sent = await upload(blob, stem + '.webp');
           if (sent.ok !== true) throw new Error(sent.detail);

@@ -1164,7 +1164,11 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
    基础规则【不写 background-image】：封面由 JS 设成内联值，默认金鱼写在
    [data-cover="false"] 里。若基础规则也写了图，会盖过内联封面。 */
 .dsh-yoimiya-music-art {
-  height: 88px;
+  /* 与裁切输出同形：封面是 512 方图，播放区也做成正方形，
+     这样看到的就是裁切时的构图，不会被横幅的比例裁掉上下。 */
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  height: auto;
   margin-bottom: 9px;
   border-radius: 10px;
   background-color: rgba(224, 138, 60, 0.08);
@@ -1173,15 +1177,15 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
   background-size: cover;
 }
 .dsh-yoimiya-music-art[data-cover="false"] {
-  background-image: url('/yoimiya-bg/mark.svg');
-  background-size: 64px 64px;
+  background-image: url('${asset('mark.svg')}');
+  background-size: 42% 42%;
   opacity: .9;
 }
 body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art {
   background-color: rgba(181, 80, 42, 0.07);
 }
 body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
-  background-image: url('/yoimiya-bg/mark-day.svg');
+  background-image: url('${asset('mark-day.svg')}');
 }
 `;
 
@@ -1273,7 +1277,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
       // 构建立即版本标记：面板上显示出来，这样"跑的是哪一版"一眼可判。
       // 起因是反复出现"改了但界面没变"——而客户端与 Host 半边的生效代价不同
       // （前者刷新、后者必须完全重启），没有标记就只能靠猜。
-      const BUILD_TAG = 'v28';
+      const BUILD_TAG = 'v29';
 
       const PARTICLE_KEY = 'dsh-yoimiya-particles-v1';
       const PARTICLE_DEFAULT = { on: true, speed: 1, density: 1, burst: 1 };
@@ -2345,6 +2349,28 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
 
         // 播放器本体。桩环境没有这些方法，整个面板降级成"只列举、不播放"，
         // 不会因此抛错。
+        // 音量与静音要存下来：每次重启都回到最大音量是很烦的事，
+        // 尤其在夜里。存储不可用时只影响持久化，不影响本次会话。
+        const VOLUME_KEY = 'dsh-yoimiya-volume-v1';
+        const readVolumeState = () => {
+          try {
+            const raw = JSON.parse(window.localStorage?.getItem(VOLUME_KEY) ?? 'null');
+            if (raw === null || typeof raw !== 'object') return { volume: 1, muted: false };
+            const v = typeof raw.volume === 'number' && raw.volume >= 0 && raw.volume <= 1 ? raw.volume : 1;
+            return { volume: v, muted: raw.muted === true };
+          } catch {
+            return { volume: 1, muted: false };
+          }
+        };
+        const volState = readVolumeState();
+        const saveVolumeState = () => {
+          try {
+            window.localStorage?.setItem(VOLUME_KEY, JSON.stringify(volState));
+          } catch {
+            /* 无痕模式等场景存不了，本次会话内仍然生效 */
+          }
+        };
+
         const audio = document.createElement('audio');
         audio.preload = 'metadata';
         const canPlay = typeof audio.play === 'function' && typeof audio.pause === 'function';
@@ -2715,26 +2741,34 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
           listBtn.setAttribute('aria-expanded', String(listOpen));
         });
 
-        let lastVol = 1;
+        let lastVol = volState.volume > 0 ? volState.volume : 1;
+
+        // 控件、播放器、存储三者始终一致：改一处就重算一次，不存在"界面显示
+        // 有声音但其实静音"这类不一致。
+        const applyVolume = () => {
+          const effective = volState.muted ? 0 : volState.volume;
+          if (canPlay) audio.volume = effective;
+          vol.value = String(Math.round(effective * 100));
+          volBtn.textContent = effective === 0 ? '🔇' : (effective < 0.5 ? '🔉' : '🔊');
+          volBtn.setAttribute('aria-pressed', String(volState.muted));
+          volBtn.title = volState.muted ? '取消静音' : '静音';
+        };
+
         vol.addEventListener('input', () => {
           const v = Number(vol.value) / 100;
+          volState.volume = v;
+          volState.muted = v === 0;
           if (v > 0) lastVol = v;
-          if (canPlay) audio.volume = v;
-          volBtn.textContent = v === 0 ? '🔇' : (v < 0.5 ? '🔉' : '🔊');
+          saveVolumeState();
+          applyVolume();
         });
         volBtn.addEventListener('click', () => {
-          if (!canPlay) return;
-          if (audio.volume > 0) {
-            lastVol = audio.volume;
-            audio.volume = 0;
-            vol.value = '0';
-            volBtn.textContent = '🔇';
-          } else {
-            audio.volume = lastVol;
-            vol.value = String(Math.round(lastVol * 100));
-            volBtn.textContent = '🔊';
-          }
+          volState.muted = !volState.muted;
+          if (!volState.muted && volState.volume === 0) volState.volume = lastVol;
+          saveVolumeState();
+          applyVolume();
         });
+        applyVolume();
 
         // 播放器本体也挂进 DOM：脱离文档的 <audio> 多数情况下能放，
         // 但挂进去能排掉一整类"能播却不发声"的疑难杂症，代价为零。

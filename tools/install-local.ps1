@@ -193,6 +193,24 @@ try {
   if ($LASTEXITCODE -ne 0) { Die ('pnpm exited with ' + $LASTEXITCODE) }
   $installed = $true
 
+  # pnpm under "nodeLinker: hoisted" COPIES a file: dependency into node_modules
+  # instead of linking it. DSH then loads that copy, frozen at install time, and
+  # every later edit to the theme is silently ignored - it looks exactly like a
+  # caching problem, and a restart does not help because the copy is a real
+  # directory. Replace it with a directory junction so DSH reads the working
+  # tree directly.
+  $entry = Join-Path $prof ('node_modules\' + $pkgName)
+  if (Test-Path $entry) {
+    $linkType = (Get-Item $entry -Force).LinkType
+    if ([string]::IsNullOrEmpty($linkType)) {
+      Remove-Item $entry -Recurse -Force
+      New-Item -ItemType Junction -Path $entry -Target $theme | Out-Null
+      Ok ('replaced the pnpm copy with a junction so edits take effect: ' + $entry)
+    } else {
+      Ok ('already a ' + $linkType + ', edits take effect directly')
+    }
+  }
+
   # ---- 4. verify -----------------------------------------------------------
   Step '4/4  Verify'
 

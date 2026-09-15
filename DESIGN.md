@@ -246,9 +246,9 @@ const INTENSITY = 'standard'; // 'standard' | 'calm' | 'plain'
 F:\dsh插件\宵宫主题\
 ├── package.json          # main=bundle/host.js · exports ./client · dsh.bundle.patch · dsh.client
 ├── cordis.patch.yml      # - insert: [{ id: yoimiya-theme, name: dsh-yoimiya-theme }]
-├── bundle/                           36 KB
+├── bundle/
 │   ├── host.js           # ESM: export default { inject:['webServer'], apply(ctx) }
-│   │                     #      注册 /yoimiya-bg/* 五条资源路由
+│   │                     #      注册 /yoimiya-bg/* 六条资源路由 + /yoimiya-music/* 四条曲库路由
 │   └── client.js         # window.__ModuleLoader__.load({ id, factory })
 │                         #      inject:['theme'] → overrideTokens() + 注入样式表
 ├── assets/
@@ -259,12 +259,36 @@ F:\dsh插件\宵宫主题\
 │   ├── mark.svg          # 金鱼标识 · 暗档 #E08A3C
 │   └── mark-day.svg      # 金鱼标识 · 亮档 #B5502A
 ├── tools/
-│   ├── verify.mjs        # 自检：node tools/verify.mjs
+│   ├── verify.mjs        # 设计契约自检：node tools/verify.mjs
+│   ├── live-check.mjs    # 服务端到底在发哪一版：node tools/live-check.mjs
+│   ├── test-cover-flow.mjs  # 封面流程端到端回归（桩 DOM）
+│   ├── test-list-songs.mjs  # 曲库列举回归（真实实现 + 临时目录）
 │   ├── install-local.ps1 # DSH Desktop 本地安装脚本（README 引用）
 │   └── awesome-entry.yml # 投稿到 awesome-dsh-plugin 目录的条目
 ├── DESIGN.md             # 本文件
 └── README.md             # 面向使用者的安装说明
 ```
+
+### 6.0 client.js 的内部分层
+
+浏览器半边**只能是一个文件**（加载器不支持插件内的相对导入，见 §6.1），所以分层
+靠文件内的顺序，而不是靠拆模块：
+
+| 区段 | 内容 |
+| --- | --- |
+| 调参 / token / CSS | 强度档、资源版本号、104 个 token、整张样式表 |
+| 基础件 | `installStyles`、`patchPlaceholders` |
+| **UI 工厂层** | `createParticles`、三个弹窗、`createMusicControls`、`createDock`，以及曲库/偏好读写 |
+| `apply(ctx)` | 只剩装配：三个 `ctx.effect` 登记 + 挂载 + 一个统一的卸载函数 |
+
+工厂层原先全写在 `apply()` 里面，`apply()` 因此有约 1920 行。这些函数只依赖
+`document` / `window` 与本文件的常量，**不碰 `ctx`**（全文件 8 处 `ctx` 都在
+`apply` 的头尾），所以没有理由待在 `apply` 的闭包里。提出来之后 `apply()` 只剩
+约 80 行，「哪些是每次装配新建的状态」一眼可辨。
+
+搬迁用脚本做而非手改，因为脚本能带不变性断言：逐行 trim 比对、块内出现反引号
+即中止（去缩进会改掉跨行模板字符串）、事后把新旧文件的非空行排序比对（结果
+「只在旧文件里出现 0 行」）。
 
 画面主体（烟花、光柱、灯笼、金鱼、纹理、波纹）全部由 CSS 渐变与手写 SVG 生成，
 合计约 15 KB；壁纸 `yoimiya-wide.jpg` 是本仓库唯一的位图资源。
@@ -533,3 +557,77 @@ const INTENSITY = 'standard'; // 'standard' | 'calm' | 'plain'
 
 这条同样适用于其它图形资产（背景天空 SVG）。**能看图就一定要看图**——否则
 就是在盲写几何，改十轮也未必收敛。
+
+---
+
+## 12. 性能：先算数，再动手
+
+这一轮做过一次完整审计（含一次独立的子代理审计，两边结论一致）。最重要的一条
+不是"改了什么"，而是**一开始算错了，差点白干**。
+
+### 12.1 MAX_SPARKS 是个够不到的上限
+
+粒子绘制的上限 `MAX_SPARKS = 900` 很容易让人以为"每帧要画 900 个粒子"。按代码里
+真实的生成参数算一遍：
+
+| 量 | 值 | 出处 |
+| --- | --- | --- |
+| 生成速率 | `0.45 + density × 1.05` = **1.5 枚/秒**（密度 1） | `spawnAcc += dt * (...)` |
+| 引线存活 | `(1.6 + rand × 1.0) / speed` ≈ **2.1 秒** | `dur` |
+| 每次爆炸火星数 | `round((16 + rand × 22) × density)` ≈ **27 个** | `burst()` |
+| 火星存活 | `(1.0 + rand × 0.8) × burstScale` ≈ **1.4 秒** | `dur` |
+
+稳态火星数 ≈ 1.5 × 27 × 1.4 ≈ **55 个**；就算密度 1.9、爆炸 1.5 全部拉满也只有
+约 **260 个**。900 这个上限永远碰不到。
+
+结论：**每粒子的字符串拼接与 `arc/fill` 根本不是瓶颈**（约 0.03–0.08 ms/帧，
+最高档 0.15–0.4 ms）。曾有一版方案要为此写精灵化渲染，是拿错误的粒子数当依据，
+已经作废。
+
+### 12.2 真正的大头是那一下铺满整块画布
+
+每帧都要用 `destination-out` 铺满整块画布来做拖尾，像素数与粒子数无关：
+
+| 视口 | DPR 1.5 下的后备存储 | 每帧铺满 |
+| --- | --- | --- |
+| 1920×1080 | 2880×1620 = 4.67 M 像素 | 约 18.7 MB 的读改写 |
+| 3840×2160 | 5760×3240 = 18.7 M 像素 | 约 74.6 MB 的读改写（60Hz 下约 9 GB/s） |
+
+**这才是每个用户、每一帧、永远都在付的固定成本**——哪怕把粒子调成"疏 + 慢"。
+所以后备存储改成按总像素数封顶（220 万，约 2880×1620），1080p 及以下输出完全
+不变；这同时是给别人的机器兜底，不只是在开发机上好看。
+
+### 12.3 按真实影响排序的处理
+
+| 问题 | 影响 | 处理 |
+| --- | --- | --- |
+| `visibilitychange` 监听器从不摘除 | **高** | dispose 时摘掉；`start()` 里加 `isConnected` 闸兜底 |
+| 每帧铺满整块画布 | 中高 | 后备存储按总像素数封顶 |
+| `resize` 每个事件都重建后备存储 | 中 | 合并到下一帧，且像素尺寸没变就不重设 |
+| 两份裁切 `draw()` 每次调用都重设画布尺寸 | 中 | 只在需要时重设（并合成一份实现，见 §6.0） |
+| 观察器每次 DOM 变更都全文档查询 | 中 | 合并到下一帧 + 单元素快路径 |
+| 切歌整表重建 | 低中 | 拆出 `markCurrent()`，只改标记 |
+| Host `listSongs` 封面匹配 O(文件 × 歌曲) | 低 | 表化 + `stat` 并发 |
+
+那条 `visibilitychange` 泄漏值得单独说：它的后果不是"少停一次"。那个闭包还攥着
+旧实例的 `start()`，下次切回前台会重新点亮一条画向**已被移除的画布**的 rAF 循环，
+而再没有任何句柄能停它——每重载一次多一条，直到重启应用。
+
+### 12.4 面板上现在有读数
+
+烟花面板底部新增「开销」一行：实测帧率、火星数、画布像素数。帧率用**未裁剪的真实
+间隔**计算——`dt` 有 0.05 的上限，拿它算帧率会把卡顿算成"还行"，正好掩盖要看的东西。
+
+要判断"这一层到底贵不贵"，看这个数，不要凭感觉，也不要拿 `MAX_SPARKS` 当依据。
+
+### 12.5 一个被静默吞掉的真实 bug
+
+这一轮改动里踩到：`let ratio` 被写在了 `resize()` 之下，而 `resize()` 在定义处就
+立即调用，一撞 TDZ 整个粒子层失效。**verify 全绿、回归全绿**——因为 `createParticles`
+整个包在 `try/catch` 里、失败只留一条 `console.warn`，而 verify 的桩 `getContext`
+返回 `null`，在那里就提前 return 了，根本走不到那一行。
+
+这是"客户端不要吞掉失败原因"（§10.2）的一个变体：**降级路径本身成了 bug 的藏身处**。
+现在 verify 第 8 项用一个**具备 2D 上下文**的桩再跑一遍 `apply()`，要求全程无任何
+`console.warn`/`error` 且粒子画布确实挂载。已实测：注入一个故障后该项立刻报出
+「有告警」与「未挂载」两条。

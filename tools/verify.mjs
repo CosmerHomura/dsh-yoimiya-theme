@@ -411,6 +411,28 @@ for (const [route, rel] of Object.entries(assetByRoute)) {
   if (!existsSync(join(root, rel))) fail(`路由 ${route} 指向的资源不存在：${rel}`);
 }
 
+// ── 7 · 两档标识必须是同一条鱼 ──────────────────────────────────
+// 暗档与亮档只允许换颜色，几何必须逐字一致。曾经出现过只改了一份、另一份
+// 留在旧体型的情况，后果是明暗切换时像换了个 logo。
+// 做法：抹掉所有颜色相关属性与标题，剩下的"骨架"必须完全相同——这样今后
+// 任何新增的几何元素也一并受约束，不用逐个列举。
+const markSkeleton = (rel) =>
+  readFileSync(join(root, rel), 'utf8')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<title>[\s\S]*?<\/title>/g, '')
+    .replace(/\s(?:fill|stroke|stop-color|stop-opacity|opacity|aria-label|role)="[^"]*"/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const skelDark = markSkeleton('assets/mark.svg');
+const skelLight = markSkeleton('assets/mark-day.svg');
+console.log('');
+console.log(`标识骨架：mark.svg ${skelDark.length} 字符 / mark-day.svg ${skelLight.length} 字符`);
+if (skelDark !== skelLight) {
+  const at = [...skelDark].findIndex((c, i) => c !== skelLight[i]);
+  fail(`两档标识的几何不一致（自第 ${at} 个字符起）：mark.svg 与 mark-day.svg 必须只差颜色`);
+}
+
 report();
 
 function report() {

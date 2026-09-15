@@ -1,52 +1,58 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-label="宵宫主题标识：金鱼">
   <title>宵宫 · 金鱼</title>
   <!-- 暗色档标识。
-       体积感来自两处【径向渐变】而不是硬边色块：左下受光、右上阴影，
-       都裁在身内。硬边椭圆看着像贴纸，渐变才读得出球体。
+       体型取自第一版：鱼身是【横椭圆】x2.6→17.0、y6.6→17.6（宽14.4 × 高11），
+       横向流线。中途有一版把它改成了竖高的蛋（宽11.4 × 高13.4），看着就成了
+       一坨胖球——改体型时务必守住这个 1.31 的宽高比。
        层次是三个实色调子：尾鳍与背鳍深一档、身居中、腹部受光亮一档。
-       注意：深色要用实色，不能给鳍加 opacity——背景透出来会让叠加处变脏。 -->
+       体积靠身内两处【径向渐变】（左下受光、右上阴影）而不是硬边色块——硬边
+       椭圆看着像贴纸。渐变都裁在身内。
+       注意：深色要用实色，不能给鳍加 opacity，背景透出来会让叠加处变脏。 -->
   <defs>
     <clipPath id="ym-body">
-      <path d="M14.6 12.5c0 3.7-2.4 6.7-5.7 6.7-3.8 0-5.7-3-5.7-6.7s1.9-6.7 5.7-6.7c3.3 0 5.7 3 5.7 6.7Z"/>
+      <path d="M2.6 12.1c0-3 3.2-5.5 7.2-5.5 4 0 7.2 2.5 7.2 5.5 0 3-3.2 5.5-7.2 5.5-4 0-7.2-2.5-7.2-5.5Z"/>
     </clipPath>
-    <radialGradient id="ym-light" cx="26%" cy="80%" r="72%">
+    <radialGradient id="ym-light" cx="24%" cy="80%" r="66%">
       <stop offset="0" stop-color="#F7CE93" stop-opacity=".92"/>
       <stop offset=".55" stop-color="#F0B068" stop-opacity=".38"/>
       <stop offset="1" stop-color="#F0B068" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="ym-shade" cx="82%" cy="12%" r="78%">
+    <radialGradient id="ym-shade" cx="84%" cy="14%" r="72%">
       <stop offset="0" stop-color="#7A3D0C" stop-opacity=".42"/>
       <stop offset=".6" stop-color="#7A3D0C" stop-opacity=".12"/>
       <stop offset="1" stop-color="#7A3D0C" stop-opacity="0"/>
     </radialGradient>
   </defs>
 
-  <!-- 后层：背鳍与尾鳍，深一档 -->
+  <!-- 后层：背鳍与尾鳍，深一档。
+       这里【不要】画胸鳍：第一版那片原本淡到几乎看不见，而深档实色压在浅色
+       腹部上会读成一块补丁，缩到 20px 更是只剩个脏点。 -->
   <g fill="#C87A32">
-    <path d="M9.7 7.3C10.6 5.6 11.6 4.7 12.8 4.6 12.6 5.5 12.3 6.4 12.1 7.4Z"/>
+    <path d="M8.8 7.6C9.7 5.9 11.0 4.9 12.7 4.8 12.0 5.7 11.6 6.6 11.4 7.6Z"/>
     <path d="M14.4 10.2C16.8 7.8 19.5 6.1 22.4 5.7 21.8 8.4 20.4 10.8 18.3 12.6 20.3 13.4 21.9 15.0 22.9 17.4 19.9 17.6 17.0 16.4 14.5 14.2Z"/>
   </g>
 
-  <!-- 尾内两道鳍条：大尺寸下给出层次，缩到 20px 时自然消失 -->
+  <!-- 尾内两道鳍条：大尺寸下给出层次，缩到 20px 时自然消失。
+       收尾必须留在尾鳍轮廓【里面】，露出去就成了外面一根杂毛。 -->
   <g fill="none" stroke="#E8A155" stroke-width=".55" stroke-linecap="round" opacity=".45">
-    <path d="M15.6 10.9c1.8-1.2 3.6-2.1 5.5-2.6"/>
-    <path d="M15.6 13.9c1.7 1.0 3.2 2.2 4.5 3.7"/>
+    <path d="M16.0 11.0c1.6-1.0 3.1-1.8 4.7-2.2"/>
+    <path d="M16.0 13.6c1.5 0.9 2.7 1.9 3.8 3.1"/>
   </g>
 
-  <!-- 中层：鱼身 -->
-  <path d="M14.6 12.5c0 3.7-2.4 6.7-5.7 6.7-3.8 0-5.7-3-5.7-6.7s1.9-6.7 5.7-6.7c3.3 0 5.7 3 5.7 6.7Z" fill="#E08A3C"/>
+  <!-- 中层：鱼身（横椭圆） -->
+  <path d="M2.6 12.1c0-3 3.2-5.5 7.2-5.5 4 0 7.2 2.5 7.2 5.5 0 3-3.2 5.5-7.2 5.5-4 0-7.2-2.5-7.2-5.5Z" fill="#E08A3C"/>
 
   <!-- 前层：身内的受光与阴影，渐变收边 -->
   <g clip-path="url(#ym-body)">
-    <rect x="2" y="5" width="14" height="14" fill="url(#ym-shade)"/>
-    <rect x="2" y="5" width="14" height="14" fill="url(#ym-light)"/>
+    <rect x="2.4" y="6.4" width="14.8" height="11.4" fill="url(#ym-shade)"/>
+    <rect x="2.4" y="6.4" width="14.8" height="11.4" fill="url(#ym-light)"/>
   </g>
 
   <!-- 鳃盖线 -->
-  <path d="M9.6 8.4c-1.0 1.1-1.5 2.4-1.5 4.1 0 1.7.5 3.1 1.5 4.2"
+  <path d="M9.2 9.2c-.9 1.1-1.3 2.2-1.3 3.4 0 1.3.4 2.4 1.3 3.4"
         fill="none" stroke="#A85D18" stroke-width=".6" stroke-linecap="round" opacity=".45"/>
 
   <!-- 眼：暗瞳加暖高光 -->
-  <circle cx="6.7" cy="11.4" r="1.35" fill="#14111C"/>
-  <circle cx="6.25" cy="10.95" r="0.5" fill="#F5D9AC"/>
+  <circle cx="6.9" cy="10.7" r="1.25" fill="#14111C"/>
+  <circle cx="6.5" cy="10.3" r="0.46" fill="#F5D9AC"/>
 </svg>

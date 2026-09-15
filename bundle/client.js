@@ -42,7 +42,7 @@ window.__ModuleLoader__.load({
     // 主题资源由 Host 以 max-age=3600 提供，URL 不变就一直是旧的——改了标识
     // 却看不到新图，很容易误判成"没生效"。加一个查询串即可换 URL，从而绕过
     // 缓存；路由只按 pathname 匹配，查询串不影响命中。
-    const ASSET_V = 'v3';
+    const ASSET_V = 'v4';
     const asset = (file) => `${BG}/${file}?v=${ASSET_V}`;
 
     /** 背景层透明度缩放。 */

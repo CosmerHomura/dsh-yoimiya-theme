@@ -1109,6 +1109,24 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-thumb[data-empty="true"]::afte
 body:not([data-ds-dark-theme]) .dsh-yoimiya-music-thumb:hover {
   box-shadow: 0 0 0 1px rgba(181, 80, 42, 0.7);
 }
+
+/* 版本标记：低对比，只为排查用 */
+.dsh-yoimiya-build {
+  margin-top: 8px;
+  font-size: 10px;
+  letter-spacing: .06em;
+  color: rgba(138, 127, 114, 0.7);
+  text-align: right;
+}
+body:not([data-ds-dark-theme]) .dsh-yoimiya-build { color: rgba(124, 106, 86, 0.65); }
+/* 列表在播放控件上方，分隔线放底部；数量多时滚动而不是无限长高 */
+.dsh-yoimiya-music-list {
+  margin-top: 0;
+  margin-bottom: 9px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid rgba(224, 138, 60, 0.18);
+}
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list { border-bottom-color: rgba(181, 80, 42, 0.16); }
 `;
 
     // ══════════════════════════════════════════════════════════════
@@ -1195,6 +1213,11 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-thumb:hover {
       //
       // 默认尊重系统的「减少动态效果」：系统要求减少动效且用户没有表过态时，
       // 默认关闭。
+
+      // 构建立即版本标记：面板上显示出来，这样"跑的是哪一版"一眼可判。
+      // 起因是反复出现"改了但界面没变"——而客户端与 Host 半边的生效代价不同
+      // （前者刷新、后者必须完全重启），没有标记就只能靠猜。
+      const BUILD_TAG = 'v21';
 
       const PARTICLE_KEY = 'dsh-yoimiya-particles-v1';
       const PARTICLE_DEFAULT = { on: true, speed: 1, density: 1, burst: 1 };
@@ -1946,6 +1969,11 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-thumb:hover {
         addBtn.setAttribute('aria-label', '添加歌曲');
         bar.append(addBtn);
 
+        const buildTag = document.createElement('div');
+        buildTag.className = 'dsh-yoimiya-build';
+        buildTag.textContent = '曲库 ' + BUILD_TAG;
+        buildTag.title = '当前运行的浏览器半边版本；Host 半边改动需完全重启 DSH';
+
         const listEl = document.createElement('div');
         listEl.className = 'dsh-yoimiya-music-list';
         listEl.dataset.open = 'false';
@@ -2261,7 +2289,9 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-thumb:hover {
         // 播放器本体也挂进 DOM：脱离文档的 <audio> 多数情况下能放，
         // 但挂进去能排掉一整类"能播却不发声"的疑难杂症，代价为零。
         audio.className = 'dsh-yoimiya-music-audio';
-        wrap.append(line, prog, bar, volRow, listEl, coverPicker, audio);
+        // 列表放在播放控件【上方】：面板锚在右下角，往上长比往下长更符合预期，
+        // 也不会把控件挤出视口。数量多时靠 max-height + overflow 滚动。
+        wrap.append(line, listEl, prog, bar, volRow, buildTag, coverPicker, audio);
 
         return {
           node: wrap,

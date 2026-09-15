@@ -460,19 +460,11 @@ const INTENSITY = 'standard'; // 'standard' | 'calm' | 'plain'
 
 顺带纠正一个假线索：裸的 `/plugins/<id>/client.js` **不是路由**，只会 404。真身只有 combo 形式 `/plugins/??<id>/client.js&rev=<rev>`。
 
-**不打开浏览器也能确认服务端手里是哪一版**：按同一套算法复算当前文件的 `rev`，再和运行中 graph 的 `rev` 比。取 graph 用 `/plugins/events`（响应的首个 `data:` 帧就是全量 entry 列表，拿到即断开）：
+**不打开浏览器也能确认服务端手里是哪一版**：`node tools/live-check.mjs [端口]`。它按同一套算法复算当前文件的 `rev` 与运行中 graph 的 `rev` 比对，再逐个核对 `assets/` 与 `?v=<ASSET_V>` 的实际字节。两个 `rev` 相等 ⇒ 服务端已经是新字节，剩下的纯粹是浏览器缓存；不等才是真的没生效。
 
-```js
-const HASH_REVISION_LENGTH = 12;
-const framedHash = (domain, parts) => {
-  const h = createHash('sha1').update(domain).update('\0');
-  for (const part of parts) h.update(`${part.byteLength}:`).update(part);
-  return h.digest('hex').slice(0, HASH_REVISION_LENGTH);
-};
-const rev = framedHash('plugin-artifact', [readFileSync('bundle/client.js')]);
-```
+资源那半边同样不需要重启：Host 用 `createReadStream` 逐次请求读盘，不缓存内容。会挡住新图的是浏览器那条 `max-age=3600`，靠 `?v=<ASSET_V>` 换 URL 穿透——所以**改过 `assets/` 就必须把 `ASSET_V` +1**，否则新图永远出不来。
 
-两个 `rev` 相等 ⇒ 服务端已经是新字节，剩下的纯粹是浏览器缓存问题；不等才是真的没生效。
+写这类探针时的一个坑：`/plugins/events` 的一帧以空行结束，必须等**整帧**读完再 `JSON.parse`。按 `"type":"graph"` 之类的字段提前跳出，能不能解析全看本次 `read()` 恰好返回多少字节——时好时坏。
 
 推论：**Host 半边的新路由、新脚本调用，在没有重启之前一律不存在。** 表现是请求落到 DSH 的 `frontend-static` 兜底：
 
@@ -521,12 +513,23 @@ const rev = framedHash('plugin-artifact', [readFileSync('bundle/client.js')]);
 | 背鳍做得细长 | 无论怎么摆都读成**尖刺** |
 | 尾两叶对称回弯 | 交叉成**蝴蝶结** |
 | 尾做成一片大三角 | 读成**鲨鱼鳍** |
-| 身体画成正圆 | 读成**普通鱼**，不是金鱼（金鱼是竖高身） |
 | 鳍用不同 opacity 叠色 | 叠加处变暗块，整条鱼读成**几个脏色块** |
+| 身体画成竖高的蛋 | 在 20–64px 下就是一坨**胖球**，读不出是鱼。这里曾被"金鱼是竖高身"这句话带偏过一轮 |
+| 胸鳍用深一档实色压在浅色腹部上 | 读成腹上一块**补丁**；第一版那片淡到几乎看不见是有道理的 |
+| 尾内鳍条的收尾戳出尾鳍轮廓 | 轮廓外多一根**杂毛** |
 
 有效的方法是：**用 sharp 把 SVG 光栅化成 PNG，再看图**（sharp 走 librsvg，
 能渲染 SVG）。渲染时刻意用高 density、并分别铺上暗档底与亮档底，才能判断
 两种档位下的观感。一轮一轮改，每一轮都先看再改。
+
+**改体型时还要把上一版并排渲出来对比。** 光看当前这一张是判断不了"胖了还是
+瘦了"的——没有参照就只能凭感觉，越改越偏。金鱼标识现在的基准是**第一版
+`17947b0`**：鱼身横椭圆 x2.6→17.0、y6.6→17.6，宽 14.4 × 高 11，宽高比
+1.31。中途有一版改成宽 11.4 × 高 13.4（比例 0.85）就被指出"太胖"。这个
+1.31 写进了两份标识文件的注释里。
+
+两档标识之间的漂移由 `tools/verify.mjs` 第 7 项兜底：抹掉颜色属性与标题后，
+两份文件的"骨架"必须逐字相同。
 
 这条同样适用于其它图形资产（背景天空 SVG）。**能看图就一定要看图**——否则
 就是在盲写几何，改十轮也未必收敛。

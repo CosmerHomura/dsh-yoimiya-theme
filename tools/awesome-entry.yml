@@ -2,17 +2,19 @@
 #
 # 用法：
 #   1. Fork https://github.com/awesome-dsh-plugin/awesome-dsh-plugin
-#   2. 在本文件里把 <owner> 换成你的 GitHub 用户名
-#   3. 把本文件复制到 fork 里的 data/plugins/<owner>__dsh-yoimiya-theme.yml
-#      （文件名必须与仓库完全对应；<owner>__<repo>.yml）
-#   4. 为你的仓库添加 GitHub topic `dsh-plugin`
-#   5. 提 PR —— 只需要这一个文件，README 由它的脚本生成，不要手改
+#   2. 把本文件复制到 fork 里的 data/plugins/CosmerHomura__dsh-yoimiya-theme.yml
+#      （文件名必须与仓库 owner/repo 完全对应）
+#   3. 为你的仓库添加 GitHub topic `dsh-plugin`
+#   4. 提 PR —— 只需要这一个文件，README 由它的脚本生成，不要手改
 #
 # 注意：描述里含 ": "（冒号加空格）时【必须加引号】，否则 YAML 会当成嵌套键。
 # 下面 en 就有 "theme: "，所以加引号；zh 用全角冒号无此问题，加引号也无妨。
+#
+# 另注：该目录 CI 会检查仓库创建满 1 天；刚建好的仓库提 PR 会被自动挡回，
+# 不是质量问题，隔天重提即可。
 
-url: https://github.com/<owner>/dsh-yoimiya-theme
-name: <owner>/dsh-yoimiya-theme
+url: https://github.com/CosmerHomura/dsh-yoimiya-theme
+name: CosmerHomura/dsh-yoimiya-theme
 category: theme
 description:
   en: 'Genshin Impact Yoimiya theme: warm two-palette color scheme for light and dark, a wallpaper that dims automatically once a conversation starts, warm-toned code syntax colors, and a hand-drawn goldfish brand mark.'

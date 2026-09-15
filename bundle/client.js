@@ -1152,6 +1152,30 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
   background: rgba(250, 244, 234, 0.99);
   box-shadow: 0 14px 34px rgba(90, 60, 30, 0.24);
 }
+
+/* ── 播放条上方的封面区 ────────────────────────────────────────────
+   基础规则【不写 background-image】：封面由 JS 设成内联值，默认金鱼写在
+   [data-cover="false"] 里。若基础规则也写了图，会盖过内联封面。 */
+.dsh-yoimiya-music-art {
+  height: 88px;
+  margin-bottom: 9px;
+  border-radius: 10px;
+  background-color: rgba(224, 138, 60, 0.08);
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: cover;
+}
+.dsh-yoimiya-music-art[data-cover="false"] {
+  background-image: url('/yoimiya-bg/mark.svg');
+  background-size: 64px 64px;
+  opacity: .9;
+}
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art {
+  background-color: rgba(181, 80, 42, 0.07);
+}
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
+  background-image: url('/yoimiya-bg/mark-day.svg');
+}
 `;
 
     // ══════════════════════════════════════════════════════════════
@@ -1242,7 +1266,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
       // 构建立即版本标记：面板上显示出来，这样"跑的是哪一版"一眼可判。
       // 起因是反复出现"改了但界面没变"——而客户端与 Host 半边的生效代价不同
       // （前者刷新、后者必须完全重启），没有标记就只能靠猜。
-      const BUILD_TAG = 'v27';
+      const BUILD_TAG = 'v28';
 
       const PARTICLE_KEY = 'dsh-yoimiya-particles-v1';
       const PARTICLE_DEFAULT = { on: true, speed: 1, density: 1, burst: 1 };
@@ -2318,6 +2342,12 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
         audio.preload = 'metadata';
         const canPlay = typeof audio.play === 'function' && typeof audio.pause === 'function';
 
+        // 播放条上方的封面区：有封面显示封面，没有就显示主题自绘的大金鱼。
+        // 封面已由裁切统一成 512 方图，用 cover 不会变形；金鱼是矢量，放大不糊。
+        const art = document.createElement('div');
+        art.className = 'dsh-yoimiya-music-art';
+        art.dataset.cover = 'false';
+
         const line = document.createElement('div');
         line.className = 'dsh-yoimiya-music-now';
         line.textContent = '未选择曲目';
@@ -2385,10 +2415,25 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
 
         const indexOfCurrent = () => songs.findIndex((s) => s.id === currentId);
 
+        const setArt = (song) => {
+          if (art.style === undefined) return;
+          if (song !== null && typeof song.image === 'string' && song.image.length > 0) {
+            // 置成内联值；此时 CSS 里 [data-cover="false"] 那条不再匹配
+            art.style.backgroundImage = 'url("/yoimiya-music/audio?name=' + encodeURIComponent(song.image) + '")';
+            art.dataset.cover = 'true';
+            return;
+          }
+          // 清掉内联值，让 CSS 的默认金鱼接上——注意不能在 CSS 基础规则里写
+          // background-image，否则会盖过封面
+          art.style.backgroundImage = '';
+          art.dataset.cover = 'false';
+        };
+
         const setCurrent = (song) => {
           currentId = song === null ? null : song.id;
           line.textContent = song === null ? '未选择曲目' : song.title;
           line.dataset.state = song === null ? 'idle' : 'playing';
+          setArt(song);
         };
 
         const play = async (song) => {
@@ -2472,6 +2517,9 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
         };
 
         const render = () => {
+          // 每次列表刷新也重算封面区：给当前这首换完封面后，refresh 会走到这里，
+          // 只靠 setCurrent 更新的话要等用户重新点一次歌才看得到。
+          setArt(songs.find((s) => s.id === currentId) || null);
           listEl.textContent = '';
           if (songs.length === 0) {
             const empty = document.createElement('div');
@@ -2686,7 +2734,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
         audio.className = 'dsh-yoimiya-music-audio';
         // 列表放在播放控件【上方】：面板锚在右下角，往上长比往下长更符合预期，
         // 也不会把控件挤出视口。数量多时靠 max-height + overflow 滚动。
-        wrap.append(line, listEl, prog, bar, volRow, buildTag, audio);
+        wrap.append(art, line, listEl, prog, bar, volRow, buildTag, audio);
 
         return {
           node: wrap,

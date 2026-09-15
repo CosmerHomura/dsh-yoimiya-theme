@@ -379,6 +379,25 @@ body:not([data-ds-dark-theme]) [data-composer-card] {
 /* 占位文案配色：硬编码值，verify.mjs 会按卡片底面核算，须 >=4.5:1。 */
 [data-composer-placeholder] { color: #9C9184 !important; }
 body:not([data-ds-dark-theme]) [data-composer-placeholder] { color: #7C6A56 !important; }
+/* ── 3 · 首页 hero 专用遮罩（body::after）─────────────────────────
+   只作用于首页，对话中完全不压——这是第一版的构图，也解决了标题可读性：
+   人物在左、DSH 标题居中，壁纸里那几道亮度 255 的光柱会让标题读不出来。
+   所以左侧几乎不压（保住人物），38% 起快速加深（给标题让出暗底）。
+   对话态不套这层：正文的可读性由会话卡自身承担，背景保持全亮通透。 */
+body:has([data-phase="hero"])::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-repeat: no-repeat;
+}
+body[data-ds-dark-theme]:has([data-phase="hero"])::after {
+  background-image: linear-gradient(96deg, rgba(12,10,18,${a(0.06)}) 0%, rgba(12,10,18,${a(0.12)}) 24%, rgba(12,10,18,${a(0.46)}) 34%, rgba(12,10,18,${a(0.75)}) 40%, rgba(12,10,18,${a(0.87)}) 52%, rgba(12,10,18,${a(0.89)}) 100%);
+}
+body:not([data-ds-dark-theme]):has([data-phase="hero"])::after {
+  background-image: linear-gradient(96deg, rgba(255,252,246,${a(0.22)}) 0%, rgba(255,252,246,${a(0.30)}) 24%, rgba(255,252,246,${a(0.60)}) 34%, rgba(255,252,246,${a(0.85)}) 40%, rgba(255,252,246,${a(0.92)}) 52%, rgba(255,252,246,${a(0.94)}) 100%);
+}
 /* 会话卡底面降到 0.30 之后，正文可能压在壁纸的高亮光柱上。给卡片内的文字
    加一层极轻的投影，让它在亮底上依然清晰——这样才敢把卡片继续做透。
    投影只针对 [data-chat-flow] 内部，不影响 UI 其余部分。 */

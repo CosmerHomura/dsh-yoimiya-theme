@@ -28,7 +28,6 @@ const origin = `http://127.0.0.1:${port}`;
 /** 浏览器半边引用到的资源。改动 assets/ 后靠 ?v=<ASSET_V> 换 URL 穿透缓存。 */
 const ASSETS = [
   'yoimiya-wide.jpg',
-  'yoimiya.jpg',
   'bg-night.svg',
   'bg-day.svg',
   'mark.svg',

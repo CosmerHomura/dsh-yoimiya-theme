@@ -3,11 +3,13 @@
 // 三件事：
 //   1. 把浏览器半边 CSS 引用的资源挂成 HTTP 路由
 //      /yoimiya-bg/yoimiya-wide.jpg  宽幅立绘（主题实际使用的壁纸，16:9）
-//      /yoimiya-bg/yoimiya.jpg       原始方图（保留作源文件；CSS 已不引用）
 //      /yoimiya-bg/bg-night.svg      夏祭夜空（暗色档程序化天空）
 //      /yoimiya-bg/bg-day.svg        和纸昼  （亮色档程序化天空）
 //      /yoimiya-bg/mark.svg          金鱼标识（暗色档 #E08A3C）
 //      /yoimiya-bg/mark-day.svg      金鱼标识（亮色档 #B5502A）
+//      注：assets/yoimiya.jpg（宽幅立绘的原始方图）留在仓库里当源文件，但
+//      【不随包发布】，因此这里也不给它挂路由——挂一条指向未发布文件的路由
+//      只会让装好的人请求到 404。
 //   2. /yoimiya-music/*  本地曲库：列举 / 上传 / 删除 / 流式播放
 //   3. 曲库目录是「文件夹即曲库」——没有清单文件需要维护：
 //         <DSH_HOME>/yoimiya-music/song.mp3       一首歌
@@ -28,7 +30,6 @@ const assets = join(here, '..', 'assets');
 
 const ROUTES = [
   { path: '/yoimiya-bg/yoimiya-wide.jpg', file: join(assets, 'yoimiya-wide.jpg'), type: 'image/jpeg' },
-  { path: '/yoimiya-bg/yoimiya.jpg', file: join(assets, 'yoimiya.jpg'), type: 'image/jpeg' },
   { path: '/yoimiya-bg/bg-night.svg', file: join(assets, 'bg-night.svg'), type: 'image/svg+xml' },
   { path: '/yoimiya-bg/bg-day.svg', file: join(assets, 'bg-day.svg'), type: 'image/svg+xml' },
   { path: '/yoimiya-bg/mark.svg', file: join(assets, 'mark.svg'), type: 'image/svg+xml' },

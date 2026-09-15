@@ -13,6 +13,7 @@
   "files": [
     "bundle",
     "assets",
+    "!assets/yoimiya.jpg",
     "tools",
     "cordis.patch.yml",
     "DESIGN.md",

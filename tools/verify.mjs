@@ -437,7 +437,6 @@ for (const r of routes) {
 // 资源文件确实存在
 const assetByRoute = {
   '/yoimiya-bg/yoimiya-wide.jpg': 'assets/yoimiya-wide.jpg',
-  '/yoimiya-bg/yoimiya.jpg': 'assets/yoimiya.jpg',
   '/yoimiya-bg/bg-night.svg': 'assets/bg-night.svg',
   '/yoimiya-bg/bg-day.svg': 'assets/bg-day.svg',
   '/yoimiya-bg/mark.svg': 'assets/mark.svg',
@@ -516,6 +515,38 @@ if (skelDark !== skelLight) {
   }
   if (!particleCanvas) {
     fail('粒子层没有挂载画布：在具备 2D 上下文的环境里 createParticles() 也应成功');
+  }
+}
+
+// ── 9 · 发布清单必须覆盖运行时真正需要的文件 ────────────────────
+// 装这个主题的人只拿到 package.json files 里列出的东西。漏掉 assets/ 的话，
+// 主题在作者机器上一切正常，装给别人却整片背景消失——而且不会有任何报错指向
+// 这里，只会看到背景没了。所以把"运行时需要的文件"逐项对着清单核一遍。
+{
+  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  const listed = pkg.files ?? [];
+  const included = listed.filter((entry) => !entry.startsWith('!'));
+  const excluded = listed.filter((entry) => entry.startsWith('!')).map((e) => e.slice(1).replace(/\/$/, ''));
+  const covered = (rel) =>
+    included.some((entry) => {
+      const base = entry.replace(/\/$/, '');
+      return rel === base || rel.startsWith(base + '/');
+    }) && !excluded.includes(rel);
+
+  const needed = [
+    'bundle/host.js',
+    'bundle/client.js',
+    'cordis.patch.yml',
+    ...Object.values(assetByRoute),
+  ];
+  const missing = needed.filter((rel) => !covered(rel));
+  console.log('');
+  console.log(
+    `发布清单：包含 ${included.length} 条 / 排除 ${excluded.length} 条，需覆盖 ${needed.length} 个运行时文件`,
+  );
+  if (excluded.length > 0) console.log(`  排除：${excluded.join(', ')}`);
+  for (const rel of missing) {
+    fail(`发布清单没覆盖运行时需要的文件：${rel}（装给别人时会缺文件）`);
   }
 }
 

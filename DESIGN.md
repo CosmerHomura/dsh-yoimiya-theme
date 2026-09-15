@@ -252,8 +252,11 @@ F:\dsh插件\宵宫主题\
 │   └── client.js         # window.__ModuleLoader__.load({ id, factory })
 │                         #      inject:['theme'] → overrideTokens() + 注入样式表
 ├── assets/
-│   ├── yoimiya-wide.jpg  # 壁纸（用户提供，经 AI 扩图），16:9，342 KB —— 唯一外部位图
-│   ├── yoimiya.jpg       # 原始方图（源文件，CSS 已不引用）
+│   ├── yoimiya-wide.jpg  # 壁纸（用户提供，经 AI 扩图），16:9，342 KB —— 唯一随包发布的位图
+│   ├── yoimiya.jpg       # 宽幅壁纸的原始方图。留在仓库里当源文件，【不随包发布】
+│   │                     #   （package.json 的 files 里被 !assets/yoimiya.jpg 排除），
+│   │                     #   因此 Host 也不给它挂路由——挂一条指向未发布文件的路由，
+│   │                     #   只会让装好的人请求到 404。verify.mjs 第 9 项会守住这条
 │   ├── bg-night.svg      # 夏祭夜空：六组烟花 + 光柱 + 灯笼 + 金鱼 + 火花拖尾，11 KB
 │   ├── bg-day.svg        # 和纸昼：暖光 + 青海波弧 + 金鱼剪影，2.5 KB
 │   ├── mark.svg          # 金鱼标识 · 暗档 #E08A3C

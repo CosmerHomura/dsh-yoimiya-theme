@@ -1,0 +1,19 @@
+# 投稿到 awesome-dsh-plugin 目录用的条目文件
+#
+# 用法：
+#   1. Fork https://github.com/awesome-dsh-plugin/awesome-dsh-plugin
+#   2. 在本文件里把 <owner> 换成你的 GitHub 用户名
+#   3. 把本文件复制到 fork 里的 data/plugins/<owner>__dsh-yoimiya-theme.yml
+#      （文件名必须与仓库完全对应；<owner>__<repo>.yml）
+#   4. 为你的仓库添加 GitHub topic `dsh-plugin`
+#   5. 提 PR —— 只需要这一个文件，README 由它的脚本生成，不要手改
+#
+# 注意：描述里含 ": "（冒号加空格）时【必须加引号】，否则 YAML 会当成嵌套键。
+# 下面 en 就有 "theme: "，所以加引号；zh 用全角冒号无此问题，加引号也无妨。
+
+url: https://github.com/<owner>/dsh-yoimiya-theme
+name: <owner>/dsh-yoimiya-theme
+category: theme
+description:
+  en: 'Genshin Impact Yoimiya theme: warm two-palette color scheme for light and dark, a wallpaper that dims automatically once a conversation starts, warm-toned code syntax colors, and a hand-drawn goldfish brand mark.'
+  zh: '《原神》宵宫主题：适配明暗两档的暖色调色板、进入对话后自动退让的壁纸、暖色代码语法高亮，以及自绘金鱼标识。'

@@ -1,7 +1,7 @@
 {
   "name": "dsh-yoimiya-theme",
   "version": "1.0.0",
-  "description": "原神宵宫主题 for DeepSeek Harness Web GUI — 暗色「夏祭夜」与亮色「和纸昼」双档护眼调色板、程序化生成的烟花夜空背景、暖色语法高亮、自绘金鱼标识",
+  "description": "原神宵宫主题 for DeepSeek Harness（Web 端与 DSH Desktop 均可安装）— 暗色「夏祭夜」与亮色「和纸昼」双档护眼调色板、程序化生成的烟花夜空背景、读取本地文件的音乐播放器（歌曲与封面不上传）、暖色语法高亮、自绘金鱼标识",
   "type": "module",
   "license": "MIT",
   "main": "bundle/host.js",

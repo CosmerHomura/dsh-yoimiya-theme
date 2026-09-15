@@ -1,6 +1,9 @@
 # 宵宫主题 · dsh-yoimiya-theme
 
-为 DeepSeek Harness Web GUI 制作的《原神》宵宫主题。
+为 **DeepSeek Harness（DSH）** 制作的《原神》宵宫主题。
+
+**Web 端与 DSH Desktop 都可以装** —— 两边是同一套界面，主题在两边的表现一致，
+不需要为桌面端单独调整。
 
 两个时刻：**夏祭夜**是烟花下的暖靛黑，**和纸昼**是和纸米色的暖光。配色跟随
 DSH 的明暗偏好自动切换，不需要额外设置。
@@ -113,14 +116,17 @@ Windows 桌面端 `<DSH_HOME>` 默认是 `%APPDATA%\dsh-desktop\harness`。
 **不上传。任何地方都不上传。**
 
 「添加歌曲」做的事只有一件：**把你选的文件复制进你本机的一个目录**（就是上面
-那个 `yoimiya-music`）。它经由应用自己的本地接口完成，而这个接口**只监听
-`127.0.0.1`**——只有你这台机器连得上，同一局域网里的其他设备也连不上。
+那个 `yoimiya-music`）。它走的是应用自己的接口，**不经过任何第三方服务器**。
 
 具体来说：
 
 - 主题**不联网**，代码里没有任何对外请求；它引用的图片全部来自插件自己的本地路由
 - 你放的歌和封面**留在本机**，不会被读取、分析或发送到任何服务器
 - 卸载主题**不会删除**你的曲库文件夹——你的文件还是你的
+- **唯一的例外是你自己开的远程访问。** 主题的接口由 DSH 自己的 Web 服务提供，
+  默认只监听 `127.0.0.1`；但如果你启用了远程访问（远程访问类插件，或 DSH Desktop
+  开放的其他端口），从别的设备打开界面时，播放器读的是 **DSH 所在那台机器**的
+  曲库。文件仍然没有离开那台机器，只是不再是你手里这台
 
 ---
 
@@ -166,6 +172,9 @@ Windows 桌面端 `<DSH_HOME>` 默认是 `%APPDATA%\dsh-desktop\harness`。
 
 ## 安装
 
+三种方式任选一种。**Web 端与 DSH Desktop 用的是同一个 `web` profile**，所以
+前两种在两边都适用；桌面端只是不带 `dsh` 命令行工具。
+
 ### 应用内插件市场
 
 设置 → 插件 → 搜索 `yoimiya` → 安装。
@@ -178,6 +187,8 @@ Windows 桌面端 `<DSH_HOME>` 默认是 `%APPDATA%\dsh-desktop\harness`。
 ```bash
 dsh plugin --profile web add github:CosmerHomura/dsh-yoimiya-theme
 ```
+
+（`--profile web` 指的是 DSH 的 profile 名字，不是"只装给网页版"。）
 
 ### DSH Desktop 手动安装
 
@@ -224,9 +235,10 @@ dsh plugin --profile web remove dsh-yoimiya-theme
 ## 兼容性
 
 - DSH 0.8.1 及以上
-- 桌面端与 Web 端均可使用
+- **Web 端与 DSH Desktop 均可使用**，两边共用同一个 `web` profile，主题表现一致
 - 明暗两档跟随 DSH 的 `light` / `dark` / `system` 偏好
 - 粒子层在拿不到 2D 上下文的环境里会自动跳过，主题本身照常工作
+- 从**别的设备**打开 Web 端时，播放器读的是 DSH 所在那台机器的曲库
 
 ---
 

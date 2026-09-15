@@ -42,7 +42,7 @@ window.__ModuleLoader__.load({
     // 主题资源由 Host 以 max-age=3600 提供，URL 不变就一直是旧的——改了标识
     // 却看不到新图，很容易误判成"没生效"。加一个查询串即可换 URL，从而绕过
     // 缓存；路由只按 pathname 匹配，查询串不影响命中。
-    const ASSET_V = 'v2';
+    const ASSET_V = 'v3';
     const asset = (file) => `${BG}/${file}?v=${ASSET_V}`;
 
     /** 背景层透明度缩放。 */
@@ -1277,7 +1277,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
       // 构建立即版本标记：面板上显示出来，这样"跑的是哪一版"一眼可判。
       // 起因是反复出现"改了但界面没变"——而客户端与 Host 半边的生效代价不同
       // （前者刷新、后者必须完全重启），没有标记就只能靠猜。
-      const BUILD_TAG = 'v29';
+      const BUILD_TAG = 'v30';
 
       const PARTICLE_KEY = 'dsh-yoimiya-particles-v1';
       const PARTICLE_DEFAULT = { on: true, speed: 1, density: 1, burst: 1 };

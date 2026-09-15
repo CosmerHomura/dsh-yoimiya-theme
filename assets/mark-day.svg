@@ -1,17 +1,52 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-label="宵宫主题标识：金鱼">
   <title>宵宫 · 金鱼（和纸昼）</title>
-  <!-- 亮色档标识：和纸昼，深焰橙 #B5502A
-       几何与暗档完全一致，只换颜色——两档必须是同一条鱼，否则主题在明暗
-       切换时会像换了个 logo。眼用纸色（在深橙身上才够亮），瞳孔用身色。 -->
-  <g fill="#B5502A">
-    <!-- 背鳍：矮圆，贴着背脊 -->
+  <!-- 亮色档标识：和纸昼。
+       几何与暗档 mark.svg 逐字一致，只换颜色——两档必须是同一条鱼，否则主题
+       在明暗切换时会像换了个 logo。改动务必两份一起改。
+       层序：深一档的鳍在后，身居中，身内两处径向渐变（左下受光、右上阴影）
+       给体积，最后是鳃盖线与眼。 -->
+  <defs>
+    <clipPath id="ym-body">
+      <path d="M14.6 12.5c0 3.7-2.4 6.7-5.7 6.7-3.8 0-5.7-3-5.7-6.7s1.9-6.7 5.7-6.7c3.3 0 5.7 3 5.7 6.7Z"/>
+    </clipPath>
+    <radialGradient id="ym-light" cx="26%" cy="80%" r="72%">
+      <stop offset="0" stop-color="#E9A070" stop-opacity=".9"/>
+      <stop offset=".55" stop-color="#DE8A55" stop-opacity=".36"/>
+      <stop offset="1" stop-color="#DE8A55" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="ym-shade" cx="82%" cy="12%" r="78%">
+      <stop offset="0" stop-color="#5E260D" stop-opacity=".44"/>
+      <stop offset=".6" stop-color="#5E260D" stop-opacity=".13"/>
+      <stop offset="1" stop-color="#5E260D" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- 后层：背鳍与尾鳍，深一档 -->
+  <g fill="#93401E">
     <path d="M9.7 7.3C10.6 5.6 11.6 4.7 12.8 4.6 12.6 5.5 12.3 6.4 12.1 7.4Z"/>
-    <!-- 尾鳍：上叶向右后、下叶向右下，缺口浅 -->
     <path d="M14.4 10.2C16.8 7.8 19.5 6.1 22.4 5.7 21.8 8.4 20.4 10.8 18.3 12.6 20.3 13.4 21.9 15.0 22.9 17.4 19.9 17.6 17.0 16.4 14.5 14.2Z"/>
-    <!-- 鱼身：竖高的蛋形 -->
-    <path d="M14.6 12.5c0 3.7-2.4 6.7-5.7 6.7-3.8 0-5.7-3-5.7-6.7s1.9-6.7 5.7-6.7c3.3 0 5.7 3 5.7 6.7Z"/>
   </g>
-  <!-- 眼与其瞳孔 -->
-  <circle cx="6.9" cy="11.4" r="1.3" fill="#FAF3E8"/>
-  <circle cx="6.45" cy="10.95" r="0.48" fill="#B5502A"/>
+
+  <!-- 尾内两道鳍条 -->
+  <g fill="none" stroke="#C97A4E" stroke-width=".55" stroke-linecap="round" opacity=".45">
+    <path d="M15.6 10.9c1.8-1.2 3.6-2.1 5.5-2.6"/>
+    <path d="M15.6 13.9c1.7 1.0 3.2 2.2 4.5 3.7"/>
+  </g>
+
+  <!-- 中层：鱼身 -->
+  <path d="M14.6 12.5c0 3.7-2.4 6.7-5.7 6.7-3.8 0-5.7-3-5.7-6.7s1.9-6.7 5.7-6.7c3.3 0 5.7 3 5.7 6.7Z" fill="#B5502A"/>
+
+  <!-- 前层：身内的受光与阴影，渐变收边 -->
+  <g clip-path="url(#ym-body)">
+    <rect x="2" y="5" width="14" height="14" fill="url(#ym-shade)"/>
+    <rect x="2" y="5" width="14" height="14" fill="url(#ym-light)"/>
+  </g>
+
+  <!-- 鳃盖线 -->
+  <path d="M9.6 8.4c-1.0 1.1-1.5 2.4-1.5 4.1 0 1.7.5 3.1 1.5 4.2"
+        fill="none" stroke="#7E3517" stroke-width=".6" stroke-linecap="round" opacity=".45"/>
+
+  <!-- 眼：暗瞳加纸色高光，结构与暗档一致 -->
+  <circle cx="6.7" cy="11.4" r="1.35" fill="#1E1410"/>
+  <circle cx="6.25" cy="10.95" r="0.5" fill="#FAF3E8"/>
 </svg>

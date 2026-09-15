@@ -1454,10 +1454,25 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-modal-primary {
           confirm.setAttribute('aria-disabled', String(confirm.disabled));
         };
 
+        // 弹窗打开期间，页面上其它地方必须拒绝拖放。DSH 的输入框自己接收拖入
+        // 的文件（会变成附件）——把音频拖进对话区就变成附件，完全不合理。
+        // 用【捕获阶段】拦在 document 上：落在弹窗之外的一律 preventDefault
+        // 加 stopPropagation，DSH 的处理器根本收不到；落在拖放区里的放行，
+        // 交给区域自己的处理器。
+        const guardDrag = (e) => {
+          const target = e.target;
+          if (target !== null && target !== undefined
+              && typeof box.contains === 'function' && box.contains(target)) return;
+          e.preventDefault();
+          e.stopPropagation();
+        };
+
         const close = () => {
           back.dataset.open = 'false';
           error.hidden = true;
           error.textContent = '';
+          document.removeEventListener('dragover', guardDrag, true);
+          document.removeEventListener('drop', guardDrag, true);
         };
         const open = () => {
           audioZone.reset();
@@ -1466,12 +1481,14 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-modal-primary {
           confirm.textContent = '添加';
           sync();
           back.dataset.open = 'true';
+          document.addEventListener('dragover', guardDrag, true);
+          document.addEventListener('drop', guardDrag, true);
         };
 
         cancel.addEventListener('click', close);
-        back.addEventListener('click', (e) => {
-          if (e.target === back) close();
-        });
+        // 【刻意不做点击遮罩关闭】：用户常常要切到别的窗口找文件，切回来时
+        // 第一次点击会落在遮罩上，那样弹窗就在"去找文件"的过程中自己关了。
+        // 只留「取消」和 Esc 两个明确的关闭路径。
         box.addEventListener('click', (e) => e.stopPropagation());
 
         confirm.addEventListener('click', () => {
@@ -1717,6 +1734,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-modal-primary {
           node: wrap,
           dialogNode: dialog.node,
           closeDialog: () => dialog.close(),
+          isDialogOpen: () => dialog.isOpen(),
           // 曲库只在打开面板时读一次；不轮询——列表是用户在面板里改的，
           // 没有理由每几秒去扫一遍磁盘
           startPolling: () => { void refresh(); },
@@ -1874,7 +1892,15 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-modal-primary {
         dropStale('.dsh-yoimiya-dock');
         document.body.append(dock);
 
+        // 窗口刚重获焦点的第一次点击不算"点外部"：用户切换窗口回来时，那一下
+        // 往往只是为了让窗口获得焦点，不该顺手把面板收掉。
+        let focusedAt = 0;
+        const onWindowFocus = () => { focusedAt = Date.now(); };
+        window.addEventListener('focus', onWindowFocus);
+
         const onDocClick = (e) => {
+          if (Date.now() - focusedAt < 500) return;
+          if (music.isDialogOpen()) return;   // 弹窗开着时只由弹窗自己关闭
           if (!dock.contains(e.target)) setOpen(null, false);
         };
         const onEsc = (e) => {
@@ -1884,6 +1910,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-modal-primary {
         document.addEventListener('keydown', onEsc);
 
         return () => {
+          window.removeEventListener('focus', onWindowFocus);
           music.stopPolling();
           document.removeEventListener('click', onDocClick);
           document.removeEventListener('keydown', onEsc);

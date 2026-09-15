@@ -47,11 +47,37 @@ const fakeEl = () => ({
 });
 
 let captured = null;
+// window 也要贴近真实：主题会挂 resize / focus 监听，粒子层会读尺寸与
+// devicePixelRatio、取 rAF。少任何一个都会让 apply() 在桩里抛错，把真实
+// 可用的代码误判为不合格。
 const window = {
   __ModuleLoader__: {
     load(spec) {
       captured = spec;
     },
+  },
+  innerWidth: 1440,
+  innerHeight: 900,
+  devicePixelRatio: 1,
+  addEventListener() {},
+  removeEventListener() {},
+  requestAnimationFrame() {
+    return 1;
+  },
+  cancelAnimationFrame() {},
+  setTimeout() {
+    return 1;
+  },
+  clearTimeout() {},
+  setInterval() {
+    return 1;
+  },
+  clearInterval() {},
+  performance: { now: () => 0 },
+  matchMedia: () => ({ matches: false }),
+  localStorage: {
+    getItem: () => null,
+    setItem() {},
   },
 };
 const document = {

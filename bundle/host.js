@@ -1,6 +1,6 @@
 // 宵宫主题 · Host 半边（dsh-yoimiya-theme）
 //
-// 两件事：
+// 三件事：
 //   1. 把浏览器半边 CSS 引用的资源挂成 HTTP 路由
 //      /yoimiya-bg/yoimiya-wide.jpg  宽幅立绘（主题实际使用的壁纸，16:9）
 //      /yoimiya-bg/yoimiya.jpg       原始方图（保留作源文件；CSS 已不引用）
@@ -8,28 +8,23 @@
 //      /yoimiya-bg/bg-day.svg        和纸昼  （亮色档程序化天空）
 //      /yoimiya-bg/mark.svg          金鱼标识（暗色档 #E08A3C）
 //      /yoimiya-bg/mark-day.svg      金鱼标识（亮色档 #B5502A）
-//   2. /yoimiya-bg/media  读取/控制系统媒体会话（GSMTC）
-//      浏览器半边碰不到 WinRT，所以这一层必须放在 Host。它调用
-//      tools/media.ps1，不依赖任何播放器的私有接口或第三方服务——
-//      网易云、Spotify、浏览器标签页都一样对待，播放器升级也不会失效。
+//   2. /yoimiya-music/*  本地曲库：列举 / 上传 / 删除 / 流式播放
+//   3. 曲库目录是「文件夹即曲库」——没有清单文件需要维护：
+//         <DSH_HOME>/yoimiya-music/song.mp3       一首歌
+//         <DSH_HOME>/yoimiya-music/song.jpg       它的封面（可选，同名即可）
+//      面板里添加和直接往文件夹里丢，效果完全一致。
 //
 // 资源路径从本文件位置解析，因此包放在任何目录都能工作，无需改常量。
 // 路由注册失败（例如同一 profile 里已有另一份实例在服务同名路由）只跳过、
 // 不抛错，避免整个 profile 加载失败。
-import { readFile } from 'node:fs/promises';
-import { execFile, spawn } from 'node:child_process';
-import { dirname, join } from 'node:path';
+import { readFile, mkdir, readdir, stat, writeFile, rm } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { basename, dirname, extname, join } from 'node:path';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const assets = join(here, '..', 'assets');
-const mediaScript = join(here, '..', 'tools', 'media.ps1');
-const playersScript = join(here, '..', 'tools', 'players.ps1');
-
-// 用绝对路径：DSH 进程的 PATH 不保证含 System32，靠 'powershell.exe' 去解析
-// 会静默失败——而失败又只表现为「检测不到播放器」，极难排查。
-const systemRoot = process.env.SystemRoot ?? 'C:\\Windows';
-const POWERSHELL = join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
 
 const ROUTES = [
   { path: '/yoimiya-bg/yoimiya-wide.jpg', file: join(assets, 'yoimiya-wide.jpg'), type: 'image/jpeg' },
@@ -40,137 +35,198 @@ const ROUTES = [
   { path: '/yoimiya-bg/mark-day.svg', file: join(assets, 'mark-day.svg'), type: 'image/svg+xml' },
 ];
 
-const MEDIA_PATH = '/yoimiya-bg/media';
-const MEDIA_ACTIONS = new Set(['status', 'toggle', 'next', 'prev']);
+// ── 本地曲库 ──────────────────────────────────────────────────────────────
+
+const MUSIC_ROOT = '/yoimiya-music';
+const MUSIC_DIR = join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'yoimiya-music');
+const MAX_UPLOAD = 40 * 1024 * 1024;
+
+const AUDIO_EXT = new Set(['.mp3', '.m4a', '.aac', '.ogg', '.oga', '.opus', '.wav', '.flac', '.webm']);
+const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif']);
+
+const MIME = {
+  '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.ogg': 'audio/ogg',
+  '.oga': 'audio/ogg', '.opus': 'audio/ogg', '.wav': 'audio/wav', '.flac': 'audio/flac',
+  '.webm': 'audio/webm',
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp',
+  '.gif': 'image/gif', '.avif': 'image/avif',
+};
 
 /**
- * 跑一次媒体脚本。任何失败都归一成 { ok:false, reason }，让前端安静地隐藏
- * 控件（而不是弹一个用户看不懂的错误）——没有播放器、没装 PowerShell、
- * 非 Windows，都属于正常情况而非故障。
+ * 只接受纯文件名：剥掉目录部分后必须与原串一致，并落在扩展名白名单里。
+ * 这是唯一一道防目录穿越的闸门，所以宁可严格——不在白名单就拒绝，不做兜底。
  */
-function runMedia(action) {
-  return new Promise((resolve) => {
-    execFile(
-      POWERSHELL,
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-       '-File', mediaScript, '-Action', action],
-      { timeout: 8000, windowsHide: true, maxBuffer: 64 * 1024, encoding: 'utf8' },
-      (err, stdout) => {
-        if (err) {
-          console.warn('[yoimiya-theme] 媒体脚本未执行成功：', err.message);
-          resolve({ ok: false, reason: 'spawn-failed' });
-          return;
-        }
-        // 脚本末尾还会打印一行 JSON；取最后一行，前面对话框噪声不影响解析
-        const line = String(stdout).trim().split(/\r?\n/).filter(Boolean).pop();
-        try {
-          resolve(JSON.parse(line));
-        } catch {
-          console.warn('[yoimiya-theme] 媒体脚本输出无法解析：', line);
-          resolve({ ok: false, reason: 'bad-output' });
-        }
-      },
+function safeName(raw) {
+  const name = String(raw ?? '').trim();
+  if (name.length === 0 || name.length > 200) return null;
+  if (name.includes('/') || name.includes('\\') || name.includes('\0')) return null;
+  if (name !== basename(name) || name === '.' || name === '..') return null;
+  const ext = extname(name).toLowerCase();
+  if (!AUDIO_EXT.has(ext) && !IMAGE_EXT.has(ext)) return null;
+  return name;
+}
+
+const stemOf = (name) => name.slice(0, name.length - extname(name).length);
+
+/** 扫目录得出曲库。封面按同名同目录匹配，没有就是没有。 */
+async function listSongs() {
+  await mkdir(MUSIC_DIR, { recursive: true });
+  const entries = await readdir(MUSIC_DIR, { withFileTypes: true });
+  const files = entries.filter((e) => e.isFile()).map((e) => e.name);
+  const songs = [];
+  for (const name of files) {
+    if (!AUDIO_EXT.has(extname(name).toLowerCase())) continue;
+    const stem = stemOf(name);
+    const cover = files.find(
+      (f) => IMAGE_EXT.has(extname(f).toLowerCase()) && stemOf(f) === stem,
     );
+    let size = 0;
+    try {
+      size = (await stat(join(MUSIC_DIR, name))).size;
+    } catch {
+      /* 列举途中被删掉就按 0 记，不用为此中断整次列举 */
+    }
+    songs.push({ id: name, title: stem, audio: name, image: cover ?? null, size });
+  }
+  songs.sort((a, b) => a.title.localeCompare(b.title, 'zh'));
+  return songs;
+}
+
+function readBody(req, limit) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let total = 0;
+    req.on('data', (chunk) => {
+      total += chunk.length;
+      if (total > limit) {
+        req.destroy();
+        reject(new Error('too-large'));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
   });
 }
 
-/** 只读路由表的处理器，与静态资源共用同一套错误处理方式。 */
-function mediaHandler(req, res) {
-  let action = 'status';
+function sendJson(res, payload, status = 200) {
+  const body = JSON.stringify(payload);
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Content-Length': Buffer.byteLength(body),
+    // 曲库随时会变，绝不能进缓存
+    'Cache-Control': 'no-store',
+  });
+  res.end(body);
+}
+
+/** 流式播放。必须支持 Range——<audio> 拖动进度条靠它，否则只能从头播。 */
+async function serveMusicFile(req, res, rawName) {
+  const name = safeName(rawName);
+  if (name === null) {
+    res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('bad name');
+    return;
+  }
+  const file = join(MUSIC_DIR, name);
+  let info;
   try {
-    const asked = new URL(req.url ?? '/', 'http://localhost').searchParams.get('action');
-    if (asked !== null && MEDIA_ACTIONS.has(asked)) action = asked;
+    info = await stat(file);
   } catch {
-    /* URL 畸形时按 status 处理 */
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('not found');
+    return;
   }
-  return runMedia(action).then((result) => {
-    const body = JSON.stringify(result);
-    res.writeHead(200, {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Content-Length': Buffer.byteLength(body),
-      // 状态每次都可能变，且带着曲名——绝不能进任何缓存
-      'Cache-Control': 'no-store',
+  const type = MIME[extname(name).toLowerCase()] ?? 'application/octet-stream';
+  const range = typeof req.headers.range === 'string' ? req.headers.range : '';
+  const match = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
+  if (match !== null) {
+    const startRaw = match[1];
+    const endRaw = match[2];
+    let start = startRaw === '' ? info.size - Number(endRaw) : Number(startRaw);
+    let end = endRaw === '' || startRaw === '' ? info.size - 1 : Number(endRaw);
+    if (!Number.isFinite(start) || start < 0) start = 0;
+    if (!Number.isFinite(end) || end >= info.size) end = info.size - 1;
+    if (start > end) {
+      res.writeHead(416, { 'Content-Range': `bytes */${info.size}` });
+      res.end();
+      return;
+    }
+    res.writeHead(206, {
+      'Content-Type': type,
+      'Content-Length': end - start + 1,
+      'Content-Range': `bytes ${start}-${end}/${info.size}`,
+      'Accept-Ranges': 'bytes',
+      'Cache-Control': 'public, max-age=3600',
     });
-    res.end(body);
+    createReadStream(file, { start, end }).pipe(res);
+    return;
+  }
+  res.writeHead(200, {
+    'Content-Type': type,
+    'Content-Length': info.size,
+    'Accept-Ranges': 'bytes',
+    'Cache-Control': 'public, max-age=3600',
   });
+  createReadStream(file).pipe(res);
 }
 
-const PLAYERS_PATH = '/yoimiya-bg/players';
-const PLAYER_IDS = new Set(['netease', 'qqmusic']);
+/** 删除一首歌：音频 + 同名的各种封面扩展名一并清掉。 */
+async function deleteSong(rawName) {
+  const name = safeName(rawName);
+  if (name === null || !AUDIO_EXT.has(extname(name).toLowerCase())) return false;
+  const stem = stemOf(name);
+  await rm(join(MUSIC_DIR, name), { force: true });
+  for (const ext of IMAGE_EXT) {
+    await rm(join(MUSIC_DIR, stem + ext), { force: true });
+  }
+  return true;
+}
 
-/** 跑一次播放器探测脚本。返回 { players, reason, detail }。 */
-function detectPlayers() {
-  return new Promise((resolve) => {
-    execFile(
-      POWERSHELL,
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', playersScript],
-      { timeout: 10000, windowsHide: true, maxBuffer: 64 * 1024, encoding: 'utf8' },
-      (err, stdout, stderr) => {
-        if (err) {
-          // 把原因带出去，别吞掉：以前这里一律回空列表，界面上「没装」和
-          // 「脚本跑不起来」长得一模一样，排查不了。
-          console.warn('[yoimiya-theme] 播放器探测未执行成功：', err.message);
-          resolve({ players: [], reason: 'spawn-failed', detail: String(err.message).slice(0, 200) });
-          return;
-        }
-        const line = String(stdout).trim().split(/\r?\n/).filter(Boolean).pop();
-        try {
-          const parsed = JSON.parse(line);
-          resolve({
-            players: Array.isArray(parsed?.players) ? parsed.players : [],
-            reason: null,
-            detail: null,
-          });
-        } catch {
-          console.warn('[yoimiya-theme] 播放器探测输出无法解析：', line);
-          resolve({
-            players: [],
-            reason: 'bad-output',
-            detail: (line || String(stderr)).slice(0, 200),
-          });
-        }
+function handleMusic(req, res, url) {
+  const action = url.pathname.slice(MUSIC_ROOT.length + 1);
+
+  if (action === 'list') {
+    return listSongs().then(
+      (songs) => sendJson(res, { ok: true, dir: MUSIC_DIR, songs }),
+      (err) => {
+        console.warn('[yoimiya-theme] 曲库列举失败：', err?.message ?? err);
+        sendJson(res, { ok: false, reason: 'list-failed', dir: MUSIC_DIR, songs: [] });
       },
     );
-  });
-}
-
-/**
- * 启动指定播放器。
- *
- * 可执行文件路径由服务端自己探测得出，**不接受客户端传来的路径**——否则这个
- * 路由就等于一个任意程序启动器。客户端只能传 id，且 id 必须落在白名单里。
- *
- * detached + unref：播放器不能挂在 DSH 进程下，否则 DSH 一退出就被带走。
- */
-function launchPlayer(id, players) {
-  const found = players.find((p) => p.id === id);
-  if (found === undefined) return { ok: false, reason: 'not-installed' };
-  if (found.running === true) return { ok: true, launched: false, reason: 'already-running' };
-  try {
-    const child = spawn(found.exe, [], { detached: true, stdio: 'ignore' });
-    child.unref();
-    return { ok: true, launched: true };
-  } catch (err) {
-    console.warn('[yoimiya-theme] 启动播放器失败：', err?.message ?? err);
-    return { ok: false, reason: 'spawn-failed' };
   }
-}
 
-/** 纯探测返回列表；带 launch 时先启动再返回最新状态（running 会变成 true）。 */
-function playersHandler(req, res, launchId) {
-  return detectPlayers().then((found) => {
-    const { players, reason, detail } = found;
-    const result = launchId === null
-      ? { ok: true, players, reason, detail }
-      : { ok: true, players, reason, detail, ...launchPlayer(launchId, players) };
-    const body = JSON.stringify(result);
-    res.writeHead(200, {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Content-Length': Buffer.byteLength(body),
-      'Cache-Control': 'no-store',
-    });
-    res.end(body);
-  });
+  if (action === 'upload') {
+    const name = safeName(url.searchParams.get('name'));
+    if (name === null) return sendJson(res, { ok: false, reason: 'bad-name' }, 400);
+    return readBody(req, MAX_UPLOAD).then(
+      async (body) => {
+        if (body.length === 0) return sendJson(res, { ok: false, reason: 'empty' }, 400);
+        await mkdir(MUSIC_DIR, { recursive: true });
+        await writeFile(join(MUSIC_DIR, name), body);
+        return sendJson(res, { ok: true, name });
+      },
+      (err) => sendJson(res, { ok: false, reason: err?.message ?? 'upload-failed' }, 400),
+    );
+  }
+
+  if (action === 'delete') {
+    const name = url.searchParams.get('name');
+    return deleteSong(name).then(
+      (removed) => sendJson(res, removed ? { ok: true } : { ok: false, reason: 'bad-name' }, removed ? 200 : 400),
+      (err) => {
+        console.warn('[yoimiya-theme] 删除失败：', err?.message ?? err);
+        sendJson(res, { ok: false, reason: 'delete-failed' }, 500);
+      },
+    );
+  }
+
+  if (action.startsWith('file/')) {
+    return serveMusicFile(req, res, decodeURIComponent(action.slice('file/'.length)));
+  }
+
+  return sendJson(res, { ok: false, reason: 'unknown-action' }, 404);
 }
 
 export default {
@@ -211,38 +267,26 @@ export default {
     }
 
     try {
-      const disposeMedia = ctx.webServer.register({
-        kind: 'exact',
-        path: MEDIA_PATH,
-        handler: mediaHandler,
-      });
-      ctx.effect(() => disposeMedia);
-      registered += 1;
-    } catch (e) {
-      console.warn(`[yoimiya-theme] 路由 ${MEDIA_PATH} 已被其他实例占用，跳过:`, e?.message ?? e);
-    }
-
-    try {
-      const disposePlayers = ctx.webServer.register({
-        kind: 'exact',
-        path: PLAYERS_PATH,
+      const disposeMusic = ctx.webServer.register({
+        kind: 'prefix',
+        path: MUSIC_ROOT,
         handler: (req, res) => {
-          let launchId = null;
+          let url;
           try {
-            const asked = new URL(req.url ?? '/', 'http://localhost').searchParams.get('launch');
-            if (asked !== null && PLAYER_IDS.has(asked)) launchId = asked;
+            url = new URL(req.url ?? '/', 'http://localhost');
           } catch {
-            /* URL 畸形时按纯探测处理 */
+            sendJson(res, { ok: false, reason: 'bad-url' }, 400);
+            return;
           }
-          return playersHandler(req, res, launchId);
+          return handleMusic(req, res, url);
         },
       });
-      ctx.effect(() => disposePlayers);
+      ctx.effect(() => disposeMusic);
       registered += 1;
     } catch (e) {
-      console.warn(`[yoimiya-theme] 路由 ${PLAYERS_PATH} 已被其他实例占用，跳过:`, e?.message ?? e);
+      console.warn(`[yoimiya-theme] 路由 ${MUSIC_ROOT} 已被其他实例占用，跳过:`, e?.message ?? e);
     }
 
-    console.log(`[yoimiya-theme] Host 半边就绪（${registered}/${ROUTES.length + 2} 条路由）`);
+    console.log(`[yoimiya-theme] Host 半边就绪（${registered}/${ROUTES.length + 1} 条路由），曲库目录 ${MUSIC_DIR}`);
   },
 };

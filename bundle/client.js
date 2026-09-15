@@ -704,48 +704,139 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-btn:hover {
   color: #8A7F72;
 }
 
-/* ── 播放器探测与启动 ─────────────────────────────────────────────── */
-.dsh-yoimiya-music-players {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+
+/* ── 本地曲库播放器 ───────────────────────────────────────────────── */
+.dsh-yoimiya-music { width: 232px; }
+.dsh-yoimiya-music-prog {
+  height: 3px;
+  margin-top: 7px;
+  border-radius: 999px;
+  background: rgba(224, 138, 60, 0.20);
+  cursor: pointer;
+  overflow: hidden;
+}
+.dsh-yoimiya-music-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: rgba(224, 138, 60, 0.85);
+  transition: width .15s linear;
+}
+.dsh-yoimiya-music-addrow { margin-top: 9px; }
+.dsh-yoimiya-music-add {
+  width: 100%;
+  border: 1px dashed rgba(224, 138, 60, 0.40);
+  border-radius: 8px;
+  background: transparent;
+  color: #F0B068;
+  font: inherit;
+  font-size: 11px;
+  padding: 5px 0;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.dsh-yoimiya-music-add:hover {
+  background: rgba(224, 138, 60, 0.12);
+  border-color: rgba(224, 138, 60, 0.75);
+}
+.dsh-yoimiya-music-add:focus-visible {
+  outline: 2px solid rgba(224, 138, 60, 0.60);
+  outline-offset: 2px;
+}
+.dsh-yoimiya-music-picker { display: none; }
+
+.dsh-yoimiya-music-list {
+  max-height: 184px;
+  overflow-y: auto;
   margin-top: 9px;
   font-size: 11px;
   color: #8A7F72;
 }
-.dsh-yoimiya-player {
-  border: 1px solid rgba(224, 138, 60, 0.28);
-  border-radius: 8px;
+.dsh-yoimiya-music-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 5px;
+  border-radius: 7px;
+}
+.dsh-yoimiya-music-row:hover { background: rgba(224, 138, 60, 0.09); }
+.dsh-yoimiya-music-row[data-current="true"] { background: rgba(224, 138, 60, 0.16); }
+.dsh-yoimiya-music-thumb {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background-color: rgba(224, 138, 60, 0.16);
+  background-size: cover;
+  background-position: center;
+}
+.dsh-yoimiya-music-title {
+  flex: 1;
+  min-width: 0;
+  border: 0;
   background: transparent;
-  color: #B9AC9C;
+  color: inherit;
   font: inherit;
-  font-size: 11px;
-  padding: 4px 9px;
+  text-align: left;
+  padding: 0;
   cursor: pointer;
-  transition: background .15s ease, color .15s ease, border-color .15s ease;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.dsh-yoimiya-player:hover:not(:disabled) {
-  color: #F0B068;
-  border-color: rgba(224, 138, 60, 0.60);
-  background: rgba(224, 138, 60, 0.12);
+.dsh-yoimiya-music-title:hover { color: #F0B068; }
+.dsh-yoimiya-music-title:focus-visible {
+  outline: 2px solid rgba(224, 138, 60, 0.60);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
-.dsh-yoimiya-player:disabled {
-  cursor: default;
-  opacity: .55;
-  border-color: rgba(224, 138, 60, 0.18);
+.dsh-yoimiya-music-row[data-current="true"] .dsh-yoimiya-music-title { color: #F0B068; }
+.dsh-yoimiya-music-del {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #8A7F72;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
 }
-.dsh-yoimiya-player:focus-visible {
+.dsh-yoimiya-music-del:hover { background: rgba(196, 74, 60, 0.22); color: #E0909E; }
+.dsh-yoimiya-music-del:focus-visible {
   outline: 2px solid rgba(224, 138, 60, 0.60);
   outline-offset: 2px;
 }
-body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-note { color: #7C6A56; }
-body:not([data-ds-dark-theme]) .dsh-yoimiya-music-players { color: #7C6A56; }
-body:not([data-ds-dark-theme]) .dsh-yoimiya-player { border-color: rgba(181, 80, 42, 0.26); color: #6B5A4A; }
-body:not([data-ds-dark-theme]) .dsh-yoimiya-player:hover:not(:disabled) {
-  color: #B5502A;
-  border-color: rgba(181, 80, 42, 0.60);
-  background: rgba(181, 80, 42, 0.10);
+.dsh-yoimiya-music-empty { line-height: 1.55; }
+.dsh-yoimiya-music-dir {
+  display: block;
+  margin-top: 5px;
+  padding: 4px 5px;
+  border-radius: 5px;
+  background: rgba(224, 138, 60, 0.10);
+  color: #B9AC9C;
+  font-size: 10px;
+  word-break: break-all;
 }
+
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-prog { background: rgba(181, 80, 42, 0.18); }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-fill { background: rgba(181, 80, 42, 0.80); }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-add { border-color: rgba(181, 80, 42, 0.36); color: #B5502A; }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-add:hover {
+  background: rgba(181, 80, 42, 0.10);
+  border-color: rgba(181, 80, 42, 0.70);
+}
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list { color: #7C6A56; }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-row:hover { background: rgba(181, 80, 42, 0.08); }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-row[data-current="true"] { background: rgba(181, 80, 42, 0.14); }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-thumb { background-color: rgba(181, 80, 42, 0.14); }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-title:hover,
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-row[data-current="true"] .dsh-yoimiya-music-title { color: #B5502A; }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-del { color: #7C6A56; }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-del:hover { background: rgba(181, 80, 42, 0.16); color: #8E3A1E; }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-dir { background: rgba(181, 80, 42, 0.09); color: #6B5A4A; }
 `;
 
     // ══════════════════════════════════════════════════════════════
@@ -1067,148 +1158,246 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-player:hover:not(:disabled) {
         }
       }
 
-            /**
-       * 音乐面板。三件事：
-       *   1. 探测本机装没装网易云 / QQ音乐（Host 侧读注册表卸载项 + 常见路径）
-       *   2. 一键后台启动（只传 id，可执行文件路径由服务端自己探测——否则这个
-       *      路由就成了任意程序启动器）
-       *   3. 控制当前媒体会话（GSMTC，任何播放器都适用）
+                  /**
+       * 本地曲库播放器。
        *
-       * 【刻意不做播放列表】两家都没有正规的本地接口：拿歌单只能逆向它们的
-       * 私有存储（客户端一更新就可能失效）或用非官方 API 带登录凭据（违反其
-       * 使用条款）。本主题要公开发布，把这类代码放进 MIT 仓库，风险与收益
-       * 完全不成比例。
+       * 曲库就是 Host 侧的一个目录（文件夹即曲库）：一首歌是一个音频文件，
+       * 封面是同名的图片文件。所以面板里添加和直接往文件夹里丢，效果一样。
+       *
+       * 这里【不再控制系统里的播放器】——那只能控制"正在放什么"，而需求是
+       * 播放自己放进去的歌。GSMTC 那套已整体移除。
        */
-      const PLAYER_LABEL = { netease: '网易云音乐', qqmusic: 'QQ音乐' };
-
       function createMusicControls() {
         const wrap = document.createElement('div');
         wrap.className = 'dsh-yoimiya-music';
 
+        // 播放器本体。桩环境没有这些方法，整个面板降级成"只列举、不播放"，
+        // 不会因此抛错。
+        const audio = document.createElement('audio');
+        audio.preload = 'metadata';
+        const canPlay = typeof audio.play === 'function' && typeof audio.pause === 'function';
+
         const line = document.createElement('div');
         line.className = 'dsh-yoimiya-music-now';
-        line.title = '来自系统媒体会话（GSMTC），任何播放器都适用';
-        line.textContent = '读取中…';
+        line.textContent = '未选择曲目';
+
+        const prog = document.createElement('div');
+        prog.className = 'dsh-yoimiya-music-prog';
+        const fill = document.createElement('div');
+        fill.className = 'dsh-yoimiya-music-fill';
+        prog.append(fill);
 
         const bar = document.createElement('div');
         bar.className = 'dsh-yoimiya-music-bar';
 
-        const players = document.createElement('div');
-        players.className = 'dsh-yoimiya-music-players';
-        players.textContent = '检测播放器…';
+        const addRow = document.createElement('div');
+        addRow.className = 'dsh-yoimiya-music-addrow';
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'dsh-yoimiya-music-add';
+        addBtn.textContent = '添加歌曲 / 封面';
+        addBtn.title = '可一次多选：同名音频与图片会自动配对成封面';
+        const picker = document.createElement('input');
+        picker.type = 'file';
+        picker.accept = 'audio/*,image/*';
+        picker.multiple = true;
+        picker.className = 'dsh-yoimiya-music-picker';
+        addRow.append(addBtn, picker);
 
-        let busy = false;
-        let timer = 0;
+        const listEl = document.createElement('div');
+        listEl.className = 'dsh-yoimiya-music-list';
+        listEl.textContent = '读取中…';
 
-        const render = (r) => {
-          if (r === null || r.ok !== true) {
-            line.textContent = '未检测到播放器';
-            line.dataset.state = 'idle';
-            return;
-          }
-          const title = r.title || '未知曲目';
-          line.textContent = r.artist ? (title + ' — ' + r.artist) : title;
-          line.dataset.state = r.status === 'Playing' ? 'playing' : 'paused';
+        let songs = [];
+        let currentId = null;
+        let dir = '';
+        let uploading = false;
+
+        const indexOfCurrent = () => songs.findIndex((s) => s.id === currentId);
+
+        const setCurrent = (song) => {
+          currentId = song === null ? null : song.id;
+          line.textContent = song === null ? '未选择曲目' : song.title;
+          line.dataset.state = song === null ? 'idle' : 'playing';
         };
 
-        const send = async (action) => {
-          if (busy) return;
-          busy = true;
+        const play = async (song) => {
+          setCurrent(song);
+          render();
+          if (!canPlay || song === null) return;
+          if (audio.src !== undefined) audio.src = '/yoimiya-music/file/' + encodeURIComponent(song.audio);
           try {
-            const res = await fetch('/yoimiya-bg/media?action=' + action, { cache: 'no-store' });
-            render(await res.json());
+            await audio.play();
           } catch {
-            render(null);
-          } finally {
-            busy = false;
+            // 自动播放策略或格式不支持：保持选中状态，让用户再点一次
           }
         };
 
-        const mk = (glyph, label, action) => {
+        const step = (delta) => {
+          if (songs.length === 0) return;
+          const at = indexOfCurrent();
+          const next = at < 0 ? 0 : (at + delta + songs.length) % songs.length;
+          void play(songs[next]);
+        };
+
+        const mk = (glyph, label, onClick) => {
           const b = document.createElement('button');
           b.type = 'button';
           b.className = 'dsh-yoimiya-music-btn';
           b.textContent = glyph;
           b.title = label;
           b.setAttribute('aria-label', label);
-          b.addEventListener('click', () => { void send(action); });
+          b.addEventListener('click', onClick);
           bar.append(b);
+          return b;
         };
-        mk('⏮', '上一首', 'prev');
-        mk('⏯', '播放 / 暂停', 'toggle');
-        mk('⏭', '下一首', 'next');
+        mk('⏮', '上一首', () => step(-1));
+        mk('⏯', '播放 / 暂停', () => {
+          if (!canPlay) return;
+          if (audio.paused === true) {
+            if (currentId === null && songs.length > 0) void play(songs[0]);
+            else void audio.play();
+          } else {
+            audio.pause();
+          }
+        });
+        mk('⏭', '下一首', () => step(1));
 
-        const renderPlayers = (result) => {
-          players.textContent = '';
-          if (result === null) {
-            players.dataset.state = 'idle';
-            players.textContent = '检测接口不可达';
+        const remove = async (song) => {
+          try {
+            const res = await fetch('/yoimiya-music/delete?name=' + encodeURIComponent(song.id), { method: 'POST' });
+            const r = await res.json();
+            if (r.ok !== true) {
+              line.textContent = '删除失败：' + (r.reason ?? '未知');
+              return;
+            }
+            if (currentId === song.id) {
+              if (canPlay) audio.pause();
+              setCurrent(null);
+            }
+            await refresh();
+          } catch {
+            line.textContent = '删除请求失败';
+          }
+        };
+
+        const render = () => {
+          listEl.textContent = '';
+          if (songs.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'dsh-yoimiya-music-empty';
+            empty.textContent = '曲库是空的。点上面添加，或直接把文件放进这个目录：';
+            const where = document.createElement('code');
+            where.className = 'dsh-yoimiya-music-dir';
+            where.textContent = dir.length > 0 ? dir : '（未知）';
+            listEl.append(empty, where);
             return;
           }
-          const list = Array.isArray(result.players) ? result.players : [];
-          if (list.length === 0) {
-            players.dataset.state = 'idle';
-            // 把 host 侧的原因带出来。「这台机器上确实没装」和「脚本根本跑
-            // 不起来」是两件事，以前都显示成"未检测到"，等于无法排查。
-            players.textContent = typeof result.reason === 'string' && result.reason.length > 0
-              ? ('检测失败：' + result.reason)
-              : '未检测到网易云 / QQ音乐';
-            return;
-          }
-          players.dataset.state = 'found';
-          list.forEach((p) => {
-            const label = PLAYER_LABEL[p.id] || p.id;
-            const b = document.createElement('button');
-            b.type = 'button';
-            b.className = 'dsh-yoimiya-player';
-            b.textContent = p.running === true ? (label + ' · 运行中') : label;
-            b.title = p.running === true ? '已经在运行' : ('后台启动 ' + label);
-            b.disabled = p.running === true;
-            b.addEventListener('click', () => { void launch(p.id); });
-            players.append(b);
+          songs.forEach((s) => {
+            const row = document.createElement('div');
+            row.className = 'dsh-yoimiya-music-row';
+            if (s.id === currentId) row.dataset.current = 'true';
+
+            const thumb = document.createElement('span');
+            thumb.className = 'dsh-yoimiya-music-thumb';
+            if (typeof s.image === 'string' && s.image.length > 0 && thumb.style !== undefined) {
+              thumb.style.backgroundImage = 'url("/yoimiya-music/file/' + encodeURIComponent(s.image) + '")';
+            }
+
+            const title = document.createElement('button');
+            title.type = 'button';
+            title.className = 'dsh-yoimiya-music-title';
+            title.textContent = s.title;
+            title.title = s.title;
+            title.addEventListener('click', () => { void play(s); });
+
+            const del = document.createElement('button');
+            del.type = 'button';
+            del.className = 'dsh-yoimiya-music-del';
+            del.textContent = '×';
+            del.title = '删除这首（连同封面）';
+            del.setAttribute('aria-label', '删除 ' + s.title);
+            del.addEventListener('click', (e) => {
+              e.stopPropagation();
+              void remove(s);
+            });
+
+            row.append(thumb, title, del);
+            listEl.append(row);
           });
         };
 
-        const probe = async () => {
+        const refresh = async () => {
           try {
-            const res = await fetch('/yoimiya-bg/players', { cache: 'no-store' });
-            renderPlayers(await res.json());
-          } catch {
-            renderPlayers(null);
-          }
-        };
-
-        const launch = async (id) => {
-          try {
-            const res = await fetch('/yoimiya-bg/players?launch=' + encodeURIComponent(id), { cache: 'no-store' });
+            const res = await fetch('/yoimiya-music/list', { cache: 'no-store' });
             const r = await res.json();
-            renderPlayers(r);
-            // 刚启动的播放器要几秒才注册媒体会话，稍后再取一次状态
-            if (r.launched === true) window.setTimeout(() => { void send('status'); }, 2500);
+            songs = Array.isArray(r.songs) ? r.songs : [];
+            if (typeof r.dir === 'string') dir = r.dir;
+            render();
           } catch {
-            renderPlayers(null);
+            songs = [];
+            listEl.textContent = '曲库接口不可达';
           }
         };
 
-        wrap.append(line, bar, players);
+        addBtn.addEventListener('click', () => {
+          if (typeof picker.click === 'function') picker.click();
+        });
+
+        picker.addEventListener('change', () => {
+          const files = picker.files;
+          if (files === undefined || files === null || files.length === 0 || uploading) return;
+          uploading = true;
+          const total = files.length;
+          let done = 0;
+          addBtn.textContent = '上传中 0/' + total;
+          const one = (file) => fetch(
+            '/yoimiya-music/upload?name=' + encodeURIComponent(file.name),
+            { method: 'POST', body: file },
+          ).catch(() => null).then(() => {
+            done += 1;
+            addBtn.textContent = '上传中 ' + done + '/' + total;
+          });
+          const queue = [];
+          for (let i = 0; i < files.length; i++) queue.push(one(files[i]));
+          Promise.all(queue).then(() => {
+            uploading = false;
+            addBtn.textContent = '添加歌曲 / 封面';
+            picker.value = '';
+            return refresh();
+          });
+        });
+
+        if (canPlay) {
+          audio.addEventListener('ended', () => step(1));
+          audio.addEventListener('timeupdate', () => {
+            const d = audio.duration;
+            if (Number.isFinite(d) && d > 0) {
+              fill.style.width = Math.round((audio.currentTime / d) * 100) + '%';
+            }
+          });
+        }
+
+        prog.addEventListener('click', (e) => {
+          if (!canPlay || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
+          if (typeof prog.getBoundingClientRect !== 'function') return;
+          const rect = prog.getBoundingClientRect();
+          if (!(rect.width > 0)) return;
+          audio.currentTime = ((e.clientX - rect.left) / rect.width) * audio.duration;
+        });
+
+        wrap.append(line, prog, bar, addRow, listEl);
 
         return {
           node: wrap,
-          // 只在面板打开时轮询：单次调用约 0.8 秒，关着还常驻轮询是白烧 CPU
-          startPolling: () => {
-            if (timer !== 0) return;
-            void send('status');
-            void probe();
-            timer = window.setInterval(() => { void send('status'); }, 3000);
-          },
+          // 曲库只在打开面板时读一次；不轮询——列表是用户在面板里改的，
+          // 没有理由每几秒去扫一遍磁盘
+          startPolling: () => { void refresh(); },
           stopPolling: () => {
-            if (timer === 0) return;
-            window.clearInterval(timer);
-            timer = 0;
+            if (canPlay) audio.pause();
           },
         };
       }
-
       const ICON_FIREWORK = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" '
         + 'stroke="currentColor" stroke-width="1.6" stroke-linecap="round">'
         + '<path d="M12 3.5v4"/><path d="M12 20.5v-3"/>'

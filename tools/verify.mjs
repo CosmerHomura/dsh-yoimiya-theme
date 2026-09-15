@@ -22,11 +22,28 @@ const notes = [];
 const fail = (msg) => failures.push(msg);
 
 // ── 1 · 在桩 DOM 里加载浏览器半边 ───────────────────────────────
+// 桩元素要尽量贴近真实 DOM：主题会写 className/dataset/style、挂子节点、
+// 注册监听、取 2D 上下文。缺任何一个字段都会让 apply() 在桩里抛错，把真实
+// 可用的代码误判为不合格。
+// getContext 返回 null 是有意的：粒子层在桩里应当走「环境不支持」分支，
+// 于是它的 canvas 逻辑不必被桩模拟，同时又验证了那条降级路径不会抛错。
 const fakeEl = () => ({
   id: '',
+  className: '',
   textContent: '',
+  innerHTML: '',
+  style: {},
+  dataset: {},
   setAttribute() {},
+  removeAttribute() {},
   remove() {},
+  append() {},
+  appendChild() {},
+  addEventListener() {},
+  removeEventListener() {},
+  getContext() {
+    return null;
+  },
 });
 
 let captured = null;
@@ -41,9 +58,11 @@ const document = {
   getElementById: () => null,
   createElement: fakeEl,
   head: { append() {} },
-  body: {},
+  body: { append() {}, appendChild() {} },
   documentElement: { setAttribute() {}, removeAttribute() {} },
   querySelectorAll: () => [],
+  addEventListener() {},
+  removeEventListener() {},
 };
 class MutationObserver {
   observe() {}
@@ -82,6 +101,7 @@ const origGetElementById = document.getElementById;
 void origGetElementById;
 document.createElement = (tag) => {
   const el = fakeEl();
+  if (tag !== 'style') return el;
   Object.defineProperty(el, 'textContent', {
     get: () => capturedCss ?? '',
     set: (v) => {
@@ -309,7 +329,9 @@ for (const [label, sel] of REQUIRED_SELECTORS) {
 {
   const n = (css.match(/backdrop-filter:/g) ?? []).length;
   if (n > 0) fail(`样式表出现了 ${n} 处 backdrop-filter：会破坏固定定位浮层的位置，禁止使用`);
-}// 注释配平：未闭合的 /* 会把它之后的所有规则一起吞掉，而花括号计数仍然"平衡"，
+}// 模板变量拼错或未定义时，CSS 里会留下字面量 undefined，那条声明整条失效
+// 且没有任何报错——必须拦下。
+if (/\bundefined\b/.test(css)) fail('样式表里出现 undefined —— 模板变量未定义或拼错');// 注释配平：未闭合的 /* 会把它之后的所有规则一起吞掉，而花括号计数仍然"平衡"，
 // 现有检查全部察觉不到。本主题的注释里会写上选择器片段，容易踩这个坑。
 {
   const opens = (css.match(/\/\*/g) ?? []).length;

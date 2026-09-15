@@ -244,7 +244,7 @@ const WALL_BRIGHT = INTENSITY === 'calm' ? 1.06 : 1.14;
     //   [data-chat-flow]  会话阅读卡（正文最后一道稳定底）
     //
     // 【刻意不设阅读遮罩】。正文背后需要的低方差，由会话卡自己的半透明底面
-    // 加毛玻璃提供，不需要在整张画面上再盖一层。此前用过一整层 body::after
+    // 加毛玻璃提供，不需要在整张画面上再盖一层。此前用过一整层 .dsh-yoimiya-scrim
     // 中心遮罩去压平背景，实测代价是把画面压闷——壁纸与人物都看不清，等于
     // 拿主题本身去换可读性，已整体删除。
     //
@@ -390,7 +390,7 @@ body:not([data-ds-dark-theme]) [data-composer-card] {
 /* 占位文案配色：硬编码值，verify.mjs 会按卡片底面核算，须 >=4.5:1。 */
 [data-composer-placeholder] { color: #9C9184 !important; }
 body:not([data-ds-dark-theme]) [data-composer-placeholder] { color: #7C6A56 !important; }
-/* ── 3 · 阅读遮罩（body::after）───────────────────────────────────
+/* ── 3 · 阅读遮罩（.dsh-yoimiya-scrim）───────────────────────────────────
    两副面孔，按 DSH 自己发布的 data-phase 切换（取值 hero / active /
    settling；输入框上也有 data-phase 但取值不相交，所以按值匹配不会误命中）：
      首页 hero          左轻右重的横向渐变——人物在左几乎不压，
@@ -398,7 +398,7 @@ body:not([data-ds-dark-theme]) [data-composer-placeholder] { color: #7C6A56 !imp
      对话 active/settling 中心椭圆——压住正文背后的亮度方差
    这是第一版的构图，也是本主题可读性的第一道保障：不要为了「更透」把它
    删掉，正文背后一旦出现亮度 255 的光柱，浅色正文就会读不出来。 */
-body::after {
+.dsh-yoimiya-scrim {
   content: '';
   position: fixed;
   inset: 0;
@@ -408,16 +408,16 @@ body::after {
   background-size: cover;
   background-position: center center;
 }
-body[data-ds-dark-theme]::after {
+body[data-ds-dark-theme] .dsh-yoimiya-scrim {
   background-image: radial-gradient(ellipse 72% 60% at 50% 46%, rgba(12,10,18,${a(0.90)}) 0%, rgba(12,10,18,${a(0.62)}) 55%, rgba(12,10,18,0) 100%);
 }
-body:not([data-ds-dark-theme])::after {
+body:not([data-ds-dark-theme]) .dsh-yoimiya-scrim {
   background-image: radial-gradient(ellipse 74% 62% at 50% 46%, rgba(248,241,229,${a(0.82)}) 0%, rgba(248,241,229,${a(0.52)}) 58%, rgba(248,241,229,0) 100%);
 }
-body[data-ds-dark-theme]:has([data-phase="hero"])::after {
+body[data-ds-dark-theme]:has([data-phase="hero"]) .dsh-yoimiya-scrim {
   background-image: linear-gradient(96deg, rgba(12,10,18,${a(0.06)}) 0%, rgba(12,10,18,${a(0.12)}) 24%, rgba(12,10,18,${a(0.46)}) 34%, rgba(12,10,18,${a(0.75)}) 40%, rgba(12,10,18,${a(0.87)}) 52%, rgba(12,10,18,${a(0.89)}) 100%);
 }
-body:not([data-ds-dark-theme]):has([data-phase="hero"])::after {
+body:not([data-ds-dark-theme]):has([data-phase="hero"]) .dsh-yoimiya-scrim {
   background-image: linear-gradient(96deg, rgba(248,241,229,${a(0.22)}) 0%, rgba(248,241,229,${a(0.30)}) 24%, rgba(248,241,229,${a(0.60)}) 34%, rgba(248,241,229,${a(0.85)}) 40%, rgba(248,241,229,${a(0.92)}) 52%, rgba(248,241,229,${a(0.94)}) 100%);
 }
 /* 会话卡底面降到 0.30 之后，正文可能压在壁纸的高亮光柱上。给卡片内的文字
@@ -510,6 +510,133 @@ body:not([data-ds-dark-theme]) pre[class*="shiki"],
 body:not([data-ds-dark-theme]) div[class*="codeBlock"] pre {
   border-color: rgba(120,80,40,0.12);
 }
+
+/* ── 烟花粒子层 ────────────────────────────────────────────────────
+   挂在阅读遮罩之后，所以叠在遮罩之上、内容之下。pointer-events 关掉，
+   绝不拦截任何交互。 */
+.dsh-yoimiya-particles {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* ── 右下角烟花控制 ────────────────────────────────────────────────
+   刻意【不用 backdrop-filter】：它会创建固定定位后代的包含块，破坏浮层
+   定位（设置面板就是这么坏的），所以这里用不透明暖色底。
+   位置抬到 bottom 52px，避开 DSH 自己右下角的状态栏。 */
+.dsh-yoimiya-dock {
+  position: fixed;
+  right: 16px;
+  bottom: 52px;
+  z-index: 2147483000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  font: 12px/1.45 ui-sans-serif, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.dsh-yoimiya-dock-btn {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(224, 138, 60, 0.46);
+  background: rgba(26, 20, 32, 0.94);
+  color: #F0B068;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(10, 6, 16, 0.38);
+  transition: transform .18s ease, border-color .18s ease, color .18s ease;
+}
+.dsh-yoimiya-dock-btn:hover { transform: translateY(-1px); border-color: rgba(224, 138, 60, 0.85); color: #F6C489; }
+.dsh-yoimiya-dock-btn[aria-expanded="true"] { border-color: rgba(224, 138, 60, 0.95); color: #F6C489; }
+
+.dsh-yoimiya-dock-panel {
+  display: none;
+  min-width: 176px;
+  padding: 11px 12px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(224, 138, 60, 0.34);
+  background: rgba(24, 18, 30, 0.97);
+  color: #EDE3D3;
+  box-shadow: 0 14px 34px rgba(10, 6, 16, 0.5);
+}
+.dsh-yoimiya-dock-panel[data-open="true"] { display: block; }
+
+.dsh-yoimiya-dock-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 9px;
+}
+.dsh-yoimiya-dock-row:first-child { margin-top: 0; }
+.dsh-yoimiya-dock-label { color: #B9AC9C; font-size: 11px; letter-spacing: .05em; }
+
+.dsh-yoimiya-seg {
+  display: inline-flex;
+  border: 1px solid rgba(224, 138, 60, 0.30);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.dsh-yoimiya-seg button,
+.dsh-yoimiya-dock-toggle {
+  border: 0;
+  background: transparent;
+  color: #B9AC9C;
+  font: inherit;
+  cursor: pointer;
+  padding: 3px 10px;
+  transition: background .15s ease, color .15s ease;
+}
+.dsh-yoimiya-dock-toggle {
+  border: 1px solid rgba(224, 138, 60, 0.30);
+  border-radius: 8px;
+  min-width: 44px;
+}
+.dsh-yoimiya-seg button[aria-pressed="true"],
+.dsh-yoimiya-dock-toggle[aria-pressed="true"] {
+  background: rgba(224, 138, 60, 0.22);
+  color: #F0B068;
+}
+.dsh-yoimiya-seg button:hover,
+.dsh-yoimiya-dock-toggle:hover { color: #F0B068; }
+.dsh-yoimiya-seg button:focus-visible,
+.dsh-yoimiya-dock-toggle:focus-visible,
+.dsh-yoimiya-dock-btn:focus-visible {
+  outline: 2px solid rgba(224, 138, 60, 0.60);
+  outline-offset: 2px;
+}
+
+/* 亮档：翻成暖米纸面，与「和纸昼」同一套色 */
+body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-btn {
+  background: rgba(248, 241, 229, 0.96);
+  border-color: rgba(181, 80, 42, 0.44);
+  color: #B5502A;
+  box-shadow: 0 4px 14px rgba(90, 60, 30, 0.18);
+}
+body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-btn:hover,
+body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-btn[aria-expanded="true"] { color: #8E3A1E; border-color: rgba(181, 80, 42, 0.8); }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-panel {
+  background: rgba(250, 244, 234, 0.98);
+  border-color: rgba(181, 80, 42, 0.30);
+  color: #33261C;
+  box-shadow: 0 14px 34px rgba(90, 60, 30, 0.22);
+}
+body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-label { color: #6B5A4A; }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-seg { border-color: rgba(181, 80, 42, 0.28); }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-seg button,
+body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-toggle { color: #6B5A4A; }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-toggle { border-color: rgba(181, 80, 42, 0.28); }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-seg button[aria-pressed="true"],
+body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-toggle[aria-pressed="true"] {
+  background: rgba(181, 80, 42, 0.16);
+  color: #B5502A;
+}
 `;
 
     // ══════════════════════════════════════════════════════════════
@@ -580,6 +707,379 @@ body:not([data-ds-dark-theme]) div[class*="codeBlock"] pre {
 
       const disposePlaceholders = patchPlaceholders();
       ctx.effect(() => disposePlaceholders, 'yoimiya-theme: placeholder copy');
+
+      // ══════════════════════════════════════════════════════════════
+      //  烟花粒子 + 右下角控制面板
+      // ══════════════════════════════════════════════════════════════
+      //
+      // 层级：body::before（立绘）→ .dsh-yoimiya-scrim（阅读遮罩）→ canvas（粒子）
+      //      → 内容。三者都带 z-index:-1，同级之间按 DOM 顺序绘制，所以遮罩必须
+      // 先挂、粒子后挂；顺序颠倒的话粒子会被遮罩压暗九成，等于没有。
+      // 这也是把遮罩从 body::after 改成真实元素的原因——伪元素永远是最后一个
+      // 子节点，任何真实元素都会被它盖住。
+      //
+      // 粒子是纯装饰：任何一步失败都只是「没有粒子」，绝不影响主题本身，所以
+      // 整个挂载过程包在 try 里，失败只留一条 warn。
+      //
+      // 默认尊重系统的「减少动态效果」：系统要求减少动效且用户没有表过态时，
+      // 默认关闭。
+
+      const PARTICLE_KEY = 'dsh-yoimiya-particles-v1';
+      const PARTICLE_DEFAULT = { on: true, speed: 1, density: 1 };
+      const SPEED_STEPS = [
+        { label: '慢', value: 0.6 },
+        { label: '中', value: 1 },
+        { label: '快', value: 1.7 },
+      ];
+      const DENSITY_STEPS = [
+        { label: '疏', value: 0.5 },
+        { label: '中', value: 1 },
+        { label: '密', value: 1.9 },
+      ];
+
+      /** 读取偏好。存储被禁用或值损坏时静默回落到默认值。 */
+      function readParticlePrefs() {
+        let saved = null;
+        try {
+          saved = JSON.parse(window.localStorage?.getItem(PARTICLE_KEY) ?? 'null');
+        } catch {
+          saved = null;
+        }
+        const prefs = { ...PARTICLE_DEFAULT, ...(typeof saved === 'object' && saved !== null ? saved : {}) };
+        if (saved === null && typeof window.matchMedia === 'function'
+            && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          prefs.on = false;
+        }
+        return prefs;
+      }
+
+      function saveParticlePrefs(prefs) {
+        try {
+          window.localStorage?.setItem(PARTICLE_KEY, JSON.stringify(prefs));
+        } catch {
+          /* 无痕模式等场景存不了，本次会话内仍然生效 */
+        }
+      }
+
+      /** 阅读遮罩：从 CSS 伪元素改为真实元素，好让粒子层能叠在它之上。 */
+      function mountScrim() {
+        const el = document.createElement('div');
+        el.className = 'dsh-yoimiya-scrim';
+        el.setAttribute('aria-hidden', 'true');
+        document.body.append(el);
+        return el;
+      }
+
+      /**
+       * 粒子模拟。返回 { canvas, setPrefs, start, stop }，或 null（环境不支持）。
+       */
+      function createParticles() {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.className = 'dsh-yoimiya-particles';
+          canvas.setAttribute('aria-hidden', 'true');
+          const g = typeof canvas.getContext === 'function' ? canvas.getContext('2d') : null;
+          if (g === null) return null; // 桩环境或没有 2D 上下文
+
+          const RATIO = Math.min(window.devicePixelRatio || 1, 1.5);
+          let W = 0;
+          let H = 0;
+
+          const resize = () => {
+            W = window.innerWidth;
+            H = window.innerHeight;
+            canvas.width = Math.max(1, Math.round(W * RATIO));
+            canvas.height = Math.max(1, Math.round(H * RATIO));
+            g.setTransform(RATIO, 0, 0, RATIO, 0, 0);
+          };
+          resize();
+
+          // 调色板与主题 token 同源，避免出现「外部插件感」的荧光色
+          const HUES = [
+            [224, 138, 60],  // 引线橙
+            [240, 176, 104], // 暖金
+            [196, 74, 60],   // 朱红
+            [246, 214, 160], // 淡金
+          ];
+
+          const rockets = [];
+          const sparks = [];
+          const MAX_SPARKS = 900;
+          let speed = 1;
+          let density = 1;
+          let spawnAcc = 0;
+          let raf = 0;
+          let last = 0;
+
+          const spawnRocket = () => {
+            const k = (Math.random() * HUES.length) | 0;
+            rockets.push({
+              x: W * (0.06 + Math.random() * 0.88),
+              y: H + 8,
+              vx: (Math.random() - 0.5) * 26,
+              vy: -H * (0.42 + Math.random() * 0.26),
+              life: 0,
+              dur: (1.5 + Math.random() * 0.9) / speed,
+              hue: HUES[k],
+            });
+          };
+
+          const burst = (r) => {
+            const n = Math.round((16 + Math.random() * 22) * density);
+            const power = H * (0.055 + Math.random() * 0.05);
+            for (let i = 0; i < n; i++) {
+              const ang = (i / n) * Math.PI * 2 + Math.random() * 0.25;
+              const sp = power * (0.55 + Math.random() * 0.7);
+              sparks.push({
+                x: r.x, y: r.y,
+                vx: Math.cos(ang) * sp,
+                vy: Math.sin(ang) * sp,
+                life: 0,
+                dur: (1.0 + Math.random() * 0.8) / speed,
+                hue: r.hue,
+                rad: 1.3,
+              });
+            }
+            if (sparks.length > MAX_SPARKS) sparks.splice(0, sparks.length - MAX_SPARKS);
+          };
+
+          const paint = (p, alpha, rad) => {
+            const h = p.hue;
+            g.fillStyle = 'rgba(' + h[0] + ',' + h[1] + ',' + h[2] + ',' + alpha.toFixed(3) + ')';
+            g.beginPath();
+            g.arc(p.x, p.y, rad, 0, 6.2832);
+            g.fill();
+          };
+
+          const step = (now) => {
+            const dt = Math.min((now - last) / 1000, 0.05);
+            last = now;
+
+            // 用 destination-out 淡出上一帧，得到自然拖尾；画布其余部分保持透明
+            g.globalCompositeOperation = 'destination-out';
+            g.fillStyle = 'rgba(0,0,0,0.20)';
+            g.fillRect(0, 0, W, H);
+            g.globalCompositeOperation = 'lighter';
+
+            spawnAcc += dt * (0.45 + density * 1.05);
+            while (spawnAcc >= 1) {
+              spawnAcc -= 1;
+              if (rockets.length < 3 + density * 3) spawnRocket();
+            }
+
+            for (let i = rockets.length - 1; i >= 0; i--) {
+              const r = rockets[i];
+              r.life += dt;
+              r.x += r.vx * dt;
+              r.y += r.vy * dt;
+              if (r.life >= r.dur) {
+                burst(r);
+                rockets.splice(i, 1);
+                continue;
+              }
+              paint(r, 0.95, 1.7);
+            }
+
+            for (let i = sparks.length - 1; i >= 0; i--) {
+              const p = sparks[i];
+              p.life += dt;
+              if (p.life >= p.dur) {
+                sparks.splice(i, 1);
+                continue;
+              }
+              p.vy += H * 0.15 * dt;          // 重力
+              p.vx *= 1 - 1.5 * dt;           // 空气阻力
+              p.vy *= 1 - 1.5 * dt;
+              p.x += p.vx * dt;
+              p.y += p.vy * dt;
+              const t = p.life / p.dur;
+              paint(p, (1 - t) * 0.9, p.rad * (0.55 + (1 - t)));
+            }
+
+            raf = window.requestAnimationFrame(step);
+          };
+
+          const start = () => {
+            if (raf !== 0) return;
+            last = window.performance.now();
+            raf = window.requestAnimationFrame(step);
+          };
+          const stop = () => {
+            if (raf === 0) return;
+            window.cancelAnimationFrame(raf);
+            raf = 0;
+            rockets.length = 0;
+            sparks.length = 0;
+            g.clearRect(0, 0, W, H);
+          };
+
+          return {
+            canvas,
+            start,
+            stop,
+            resize,
+            setPrefs: (prefs) => {
+              speed = prefs.speed;
+              density = prefs.density;
+            },
+          };
+        } catch (err) {
+          console.warn('[yoimiya-theme] 烟花粒子启用失败，已跳过：', err);
+          return null;
+        }
+      }
+
+      /** 右下角小面板：开关 / 速度 / 密度。 */
+      function createDock(prefs, onChange) {
+        const dock = document.createElement('div');
+        dock.className = 'dsh-yoimiya-dock';
+
+        const panel = document.createElement('div');
+        panel.className = 'dsh-yoimiya-dock-panel';
+        panel.setAttribute('role', 'group');
+        panel.setAttribute('aria-label', '烟花效果');
+
+        const row = (label) => {
+          const r = document.createElement('div');
+          r.className = 'dsh-yoimiya-dock-row';
+          const l = document.createElement('span');
+          l.className = 'dsh-yoimiya-dock-label';
+          l.textContent = label;
+          r.append(l);
+          return r;
+        };
+
+        const group = (steps, current, pick) => {
+          const seg = document.createElement('span');
+          seg.className = 'dsh-yoimiya-seg';
+          const buttons = steps.map((s) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.textContent = s.label;
+            b.setAttribute('aria-pressed', String(s.value === current()));
+            b.addEventListener('click', () => {
+              pick(s.value);
+              buttons.forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+            });
+            seg.append(b);
+            return b;
+          });
+          return seg;
+        };
+
+        const onRow = row('烟花');
+        const onBtn = document.createElement('button');
+        onBtn.type = 'button';
+        onBtn.className = 'dsh-yoimiya-dock-toggle';
+        onBtn.textContent = prefs.on ? '开' : '关';
+        onBtn.setAttribute('aria-pressed', String(prefs.on));
+        onBtn.addEventListener('click', () => {
+          prefs.on = !prefs.on;
+          onBtn.textContent = prefs.on ? '开' : '关';
+          onBtn.setAttribute('aria-pressed', String(prefs.on));
+          onChange(prefs);
+        });
+        onRow.append(onBtn);
+
+        const speedRow = row('速度');
+        speedRow.append(group(SPEED_STEPS, () => prefs.speed, (v) => {
+          prefs.speed = v;
+          onChange(prefs);
+        }));
+
+        const densityRow = row('密度');
+        densityRow.append(group(DENSITY_STEPS, () => prefs.density, (v) => {
+          prefs.density = v;
+          onChange(prefs);
+        }));
+
+        panel.append(onRow, speedRow, densityRow);
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'dsh-yoimiya-dock-btn';
+        btn.title = '宵宫主题 · 烟花';
+        btn.setAttribute('aria-label', '烟花效果设置');
+        btn.setAttribute('aria-expanded', 'false');
+        // 金鱼线描，与侧边栏品牌 mark 同一支笔触
+        btn.innerHTML = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" '
+          + 'stroke="currentColor" stroke-width="1.6" stroke-linecap="round">'
+          + '<path d="M12 3.5v4"/><path d="M12 20.5v-3"/>'
+          + '<path d="M4.5 12h3"/><path d="M16.5 12h3"/>'
+          + '<path d="M7 7l2 2"/><path d="M17 7l-2 2"/>'
+          + '<circle cx="12" cy="12" r="4"/>'
+          + '<circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/></svg>';
+
+        const setOpen = (open) => {
+          panel.dataset.open = String(open);
+          btn.setAttribute('aria-expanded', String(open));
+        };
+        setOpen(false);
+
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          setOpen(panel.dataset.open !== 'true');
+        });
+        const onDocClick = (e) => {
+          if (!dock.contains(e.target)) setOpen(false);
+        };
+        const onEsc = (e) => {
+          if (e.key === 'Escape') setOpen(false);
+        };
+        document.addEventListener('click', onDocClick);
+        document.addEventListener('keydown', onEsc);
+
+        dock.append(panel, btn);
+        document.body.append(dock);
+
+        return () => {
+          document.removeEventListener('click', onDocClick);
+          document.removeEventListener('keydown', onEsc);
+          dock.remove();
+        };
+      }
+
+      const particlePrefs = readParticlePrefs();
+      const scrimEl = mountScrim();
+      const particles = createParticles();
+      let disposeResize = null;
+
+      if (particles !== null) {
+        document.body.append(particles.canvas);
+        particles.setPrefs(particlePrefs);
+        if (particlePrefs.on) particles.start();
+
+        const onResize = () => {
+          particles.resize();
+          if (particlePrefs.on) particles.start();
+        };
+        window.addEventListener('resize', onResize);
+        disposeResize = () => window.removeEventListener('resize', onResize);
+
+        // 页面不可见时停掉，别在后台空转烧电
+        const onVisibility = () => {
+          if (document.hidden) particles.stop();
+          else if (particlePrefs.on) particles.start();
+        };
+        document.addEventListener('visibilitychange', onVisibility);
+      }
+
+      const disposeDock = particles === null ? () => {} : createDock(particlePrefs, (next) => {
+        saveParticlePrefs(next);
+        particles.setPrefs(next);
+        if (next.on) particles.start();
+        else particles.stop();
+      });
+
+      ctx.effect(() => () => {
+        if (typeof disposeDock === 'function') disposeDock();
+        if (disposeResize !== null) disposeResize();
+        if (particles !== null) {
+          particles.stop();
+          particles.canvas.remove();
+        }
+        scrimEl.remove();
+      }, 'yoimiya-theme: fireworks');
 
       // 供使用者写自己的叠加 CSS：html[data-dsh-yoimiya="on"] { ... }
       document.documentElement.setAttribute('data-dsh-yoimiya', 'on');

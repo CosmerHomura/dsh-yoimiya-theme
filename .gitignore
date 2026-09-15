@@ -1,0 +1,11 @@
+# 用户提供的《原神》角色美术 —— 不在 MIT 授权范围内，不进仓库
+assets/yoimiya.jpg
+assets/yoimiya-wide.jpg
+
+# 依赖与临时产物
+node_modules/
+*.bak
+*.tmp
+
+# 工具脚本产出的中间文件（以 _ 开头的都是一次性探针）
+tools/_*

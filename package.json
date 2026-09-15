@@ -1,0 +1,42 @@
+{
+  "name": "dsh-yoimiya-theme",
+  "version": "1.0.0",
+  "description": "原神宵宫主题 for DeepSeek Harness Web GUI — 暗色「夏祭夜」与亮色「和纸昼」双档护眼调色板、程序化生成的烟花夜空背景、暖色语法高亮、自绘金鱼标识",
+  "type": "module",
+  "license": "MIT",
+  "main": "bundle/host.js",
+  "exports": {
+    ".": "./bundle/host.js",
+    "./client": "./bundle/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bundle",
+    "assets",
+    "tools",
+    "cordis.patch.yml",
+    "preview.html",
+    "DESIGN.md",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [],
+      "immediately": true
+    }
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "dsh-plugin",
+    "theme",
+    "yoimiya",
+    "genshin",
+    "宵宫",
+    "eye-comfort"
+  ]
+}

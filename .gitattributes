@@ -1,0 +1,6 @@
+# 统一用 LF 存储，避免 Windows 的 core.autocrlf 把 JS/YAML 写成 CRLF
+* text=auto eol=lf
+
+# 二进制资源（若日后加入）
+*.jpg binary
+*.png binary

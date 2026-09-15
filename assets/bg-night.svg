@@ -1,0 +1,230 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900" role="img" aria-label="夏祭夜空：多层烟花、光柱、灯笼与金鱼">
+  <title>夏祭夜空</title>
+  <defs>
+    <radialGradient id="gWarm" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#F5BC72" stop-opacity=".34"/>
+      <stop offset=".45" stop-color="#C4622A" stop-opacity=".12"/>
+      <stop offset="1" stop-color="#8E3F22" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="gRose" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#E07A62" stop-opacity=".28"/>
+      <stop offset=".5" stop-color="#A03040" stop-opacity=".10"/>
+      <stop offset="1" stop-color="#5E2540" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="gViolet" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#9A86CE" stop-opacity=".20"/>
+      <stop offset="1" stop-color="#5A4A85" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="gLantern" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#FFD49A" stop-opacity=".38"/>
+      <stop offset=".42" stop-color="#E08A3C" stop-opacity=".13"/>
+      <stop offset="1" stop-color="#E08A3C" stop-opacity="0"/>
+    </radialGradient>
+    <!-- 地平线辉光：呼应角色立绘底部的冷蓝，让图片与程序化背景接缝不突兀 -->
+    <linearGradient id="gHorizon" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#6E8FC0" stop-opacity=".18"/>
+      <stop offset=".45" stop-color="#5A6FA8" stop-opacity=".07"/>
+      <stop offset="1" stop-color="#4A5C90" stop-opacity="0"/>
+    </linearGradient>
+    <!-- 光柱：呼应立绘里的两道竖直光带 -->
+    <linearGradient id="gPillar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFE2B8" stop-opacity="0"/>
+      <stop offset=".3" stop-color="#FFE2B8" stop-opacity=".85"/>
+      <stop offset=".72" stop-color="#F0C890" stop-opacity=".45"/>
+      <stop offset="1" stop-color="#F0C890" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- 放射线：长 / 中 / 短，带末端光点，供 <use> 旋转复用 -->
+    <g id="rayA">
+      <line x1="0" y1="0" x2="0" y2="-132" stroke="#EFB268" stroke-width="1.1" stroke-linecap="round"/>
+      <circle cx="0" cy="-132" r="2.4" fill="#F8DFAE"/>
+    </g>
+    <g id="rayB">
+      <line x1="0" y1="0" x2="0" y2="-92" stroke="#EFB268" stroke-width="1" stroke-linecap="round"/>
+      <circle cx="0" cy="-92" r="1.8" fill="#F8DFAE"/>
+    </g>
+    <line id="rayC" x1="0" y1="0" x2="0" y2="-56" stroke="#EFB268" stroke-width="1" stroke-linecap="round"/>
+
+    <g id="rayR">
+      <line x1="0" y1="0" x2="0" y2="-100" stroke="#DE7A62" stroke-width="1.1" stroke-linecap="round"/>
+      <circle cx="0" cy="-100" r="2" fill="#F4BCA8"/>
+    </g>
+    <line id="rayR2" x1="0" y1="0" x2="0" y2="-60" stroke="#DE7A62" stroke-width="1" stroke-linecap="round"/>
+
+    <g id="rayV">
+      <line x1="0" y1="0" x2="0" y2="-74" stroke="#A994D6" stroke-width="1" stroke-linecap="round"/>
+      <circle cx="0" cy="-74" r="1.6" fill="#D6C8F0"/>
+    </g>
+    <line id="rayV2" x1="0" y1="0" x2="0" y2="-42" stroke="#A994D6" stroke-width="1" stroke-linecap="round"/>
+
+    <!-- 金鱼剪影：体 + 叉尾 + 背鳍 + 眼 -->
+    <g id="goldfish">
+      <path d="M2.6 12.1c0-3 3.2-5.5 7.2-5.5 4 0 7.2 2.5 7.2 5.5 0 3-3.2 5.5-7.2 5.5-4 0-7.2-2.5-7.2-5.5Z"/>
+      <path d="M16.3 12c1.9-2.6 4.1-4.3 6.3-5-.7 2.2-1.2 3.7-2 5 .8 1.3 1.3 2.8 2 5-2.2-.7-4.4-2.4-6.3-5Z" opacity=".85"/>
+      <path d="M9.4 6.8c1.1-1.3 2.7-2 4.3-2.1-.8 1.1-1.3 1.9-1.5 2.7Z" opacity=".7"/>
+    </g>
+
+    <!-- 麻叶纹／斜纹：防大片死平 -->
+    <pattern id="lattice" width="34" height="34" patternUnits="userSpaceOnUse">
+      <path d="M0 0 L34 34 M34 0 L0 34" stroke="#E9C79A" stroke-width=".6" fill="none"/>
+    </pattern>
+    <pattern id="latticeFine" width="13" height="13" patternUnits="userSpaceOnUse">
+      <path d="M0 0 L13 13" stroke="#E9C79A" stroke-width=".4" fill="none"/>
+    </pattern>
+  </defs>
+
+  <!-- 1 · 地平线辉光（冷蓝，接住立绘底边） -->
+  <rect x="0" y="560" width="1600" height="340" fill="url(#gHorizon)"/>
+
+  <!-- 2 · 斜纹肌理：粗纹全幅 + 细纹只在上缘一条带 -->
+  <rect x="0" y="0" width="1600" height="900" fill="url(#lattice)" opacity=".05"/>
+  <rect x="0" y="0" width="1600" height="210" fill="url(#latticeFine)" opacity=".04"/>
+
+  <!-- 3 · 光柱：呼应立绘的竖直光带，极淡以免干扰阅读 -->
+  <g opacity=".09">
+    <rect x="378" y="-40" width="4" height="720" fill="url(#gPillar)"/>
+    <rect x="618" y="-60" width="2.4" height="620" fill="url(#gPillar)"/>
+    <rect x="986" y="-30" width="3.2" height="700" fill="url(#gPillar)"/>
+    <rect x="1306" y="-70" width="5" height="660" fill="url(#gPillar)"/>
+    <rect x="148" y="-50" width="2.6" height="580" fill="url(#gPillar)"/>
+  </g>
+
+  <!-- 4 · 灯笼暖斑：右下主灯 + 左上余灯 + 三个远处小灯 -->
+  <circle cx="1466" cy="686" r="225" fill="url(#gLantern)" opacity=".85"/>
+  <circle cx="112" cy="172" r="185" fill="url(#gLantern)" opacity=".5"/>
+  <circle cx="1546" cy="248" r="96" fill="url(#gLantern)" opacity=".45"/>
+  <circle cx="248" cy="856" r="120" fill="url(#gLantern)" opacity=".4"/>
+  <circle cx="1338" cy="52" r="86" fill="url(#gLantern)" opacity=".32"/>
+
+  <!-- 5 · 烟花 A：右上主爆（暖橙，20 线） -->
+  <g transform="translate(1352,138)">
+    <circle cx="0" cy="0" r="212" fill="url(#gWarm)" opacity=".95"/>
+    <g opacity=".52">
+      <use href="#rayA" transform="rotate(0)"/>
+      <use href="#rayA" transform="rotate(60)"/>
+      <use href="#rayA" transform="rotate(120)"/>
+      <use href="#rayA" transform="rotate(180)"/>
+      <use href="#rayA" transform="rotate(240)"/>
+      <use href="#rayA" transform="rotate(300)"/>
+      <use href="#rayB" transform="rotate(30)"/>
+      <use href="#rayB" transform="rotate(90)"/>
+      <use href="#rayB" transform="rotate(150)"/>
+      <use href="#rayB" transform="rotate(210)"/>
+      <use href="#rayB" transform="rotate(270)"/>
+      <use href="#rayB" transform="rotate(330)"/>
+    </g>
+    <g opacity=".28">
+      <use href="#rayC" transform="rotate(15)"/>
+      <use href="#rayC" transform="rotate(75)"/>
+      <use href="#rayC" transform="rotate(105)"/>
+      <use href="#rayC" transform="rotate(165)"/>
+      <use href="#rayC" transform="rotate(195)"/>
+      <use href="#rayC" transform="rotate(255)"/>
+      <use href="#rayC" transform="rotate(285)"/>
+      <use href="#rayC" transform="rotate(345)"/>
+    </g>
+  </g>
+
+  <!-- 6 · 烟花 B：左下副爆（绯红，12 线） -->
+  <g transform="translate(196,768)">
+    <circle cx="0" cy="0" r="168" fill="url(#gRose)" opacity=".9"/>
+    <g opacity=".4">
+      <use href="#rayR" transform="rotate(12)"/>
+      <use href="#rayR" transform="rotate(72)"/>
+      <use href="#rayR" transform="rotate(132)"/>
+      <use href="#rayR" transform="rotate(192)"/>
+      <use href="#rayR" transform="rotate(252)"/>
+      <use href="#rayR" transform="rotate(312)"/>
+      <use href="#rayR2" transform="rotate(42)"/>
+      <use href="#rayR2" transform="rotate(102)"/>
+      <use href="#rayR2" transform="rotate(162)"/>
+      <use href="#rayR2" transform="rotate(222)"/>
+      <use href="#rayR2" transform="rotate(282)"/>
+      <use href="#rayR2" transform="rotate(342)"/>
+    </g>
+  </g>
+
+  <!-- 7 · 烟花 C：右缘中景（冷紫，12 线，做色相对比） -->
+  <g transform="translate(1566,398)">
+    <circle cx="0" cy="0" r="118" fill="url(#gViolet)" opacity=".85"/>
+    <g opacity=".32">
+      <use href="#rayV" transform="rotate(20)"/>
+      <use href="#rayV" transform="rotate(80)"/>
+      <use href="#rayV" transform="rotate(140)"/>
+      <use href="#rayV" transform="rotate(200)"/>
+      <use href="#rayV" transform="rotate(260)"/>
+      <use href="#rayV" transform="rotate(320)"/>
+      <use href="#rayV2" transform="rotate(50)"/>
+      <use href="#rayV2" transform="rotate(110)"/>
+      <use href="#rayV2" transform="rotate(170)"/>
+      <use href="#rayV2" transform="rotate(230)"/>
+      <use href="#rayV2" transform="rotate(290)"/>
+      <use href="#rayV2" transform="rotate(350)"/>
+    </g>
+  </g>
+
+  <!-- 8 · 烟花 D：左上中景（暖橙，8 线） -->
+  <g transform="translate(92,168)">
+    <circle cx="0" cy="0" r="104" fill="url(#gWarm)" opacity=".7"/>
+    <g opacity=".34">
+      <use href="#rayB" transform="rotate(10)"/>
+      <use href="#rayB" transform="rotate(55)"/>
+      <use href="#rayB" transform="rotate(100)"/>
+      <use href="#rayB" transform="rotate(145)"/>
+      <use href="#rayB" transform="rotate(190)"/>
+      <use href="#rayB" transform="rotate(235)"/>
+      <use href="#rayB" transform="rotate(280)"/>
+      <use href="#rayB" transform="rotate(325)"/>
+    </g>
+  </g>
+
+  <!-- 9 · 烟花 E/F：远景小爆（只留疏线，制造纵深） -->
+  <g transform="translate(1196,806)" opacity=".3">
+    <use href="#rayV2" transform="rotate(25)"/>
+    <use href="#rayV2" transform="rotate(115)"/>
+    <use href="#rayV2" transform="rotate(205)"/>
+    <use href="#rayV2" transform="rotate(295)"/>
+  </g>
+  <g transform="translate(726,58)" opacity=".26">
+    <circle cx="0" cy="0" r="64" fill="url(#gWarm)" opacity=".8"/>
+    <use href="#rayC" transform="rotate(18)"/>
+    <use href="#rayC" transform="rotate(78)"/>
+    <use href="#rayC" transform="rotate(138)"/>
+    <use href="#rayC" transform="rotate(198)"/>
+    <use href="#rayC" transform="rotate(258)"/>
+    <use href="#rayC" transform="rotate(318)"/>
+  </g>
+
+  <!-- 10 · 火花拖尾：线香花火的点状轨迹 -->
+  <g stroke="#F2CE92" fill="none" stroke-linecap="round" opacity=".38">
+    <path d="M112 430 C232 372 330 402 402 336" stroke-width="1.8" stroke-dasharray="1 9"/>
+    <path d="M1502 738 C1408 690 1332 716 1266 664" stroke-width="1.6" stroke-dasharray="1 8"/>
+    <path d="M470 96 C548 130 596 104 664 140" stroke-width="1.4" stroke-dasharray="1 10"/>
+    <path d="M1046 852 C1120 818 1186 842 1258 806" stroke-width="1.6" stroke-dasharray="1 9"/>
+  </g>
+
+  <!-- 11 · 金鱼：暗夜里的一抹游影 -->
+  <g opacity=".09" fill="#E8A860">
+    <use href="#goldfish" transform="translate(1136,584) scale(3.1) rotate(-13)"/>
+    <use href="#goldfish" transform="translate(300,432) scale(2.1) rotate(15)"/>
+    <use href="#goldfish" transform="translate(1444,470) scale(1.7) rotate(-7)"/>
+  </g>
+
+  <!-- 12 · 星点 -->
+  <g fill="#F8DFAE">
+    <circle cx="424" cy="86" r="1.5" opacity=".32"/>
+    <circle cx="686" cy="50" r="1.2" opacity=".24"/>
+    <circle cx="962" cy="122" r="1.4" opacity=".28"/>
+    <circle cx="1128" cy="58" r="1.1" opacity=".20"/>
+    <circle cx="244" cy="128" r="1.1" opacity=".17"/>
+    <circle cx="1540" cy="622" r="1.3" opacity=".21"/>
+    <circle cx="86" cy="472" r="1.2" opacity=".18"/>
+    <circle cx="1330" cy="390" r="1.1" opacity=".16"/>
+    <circle cx="572" cy="188" r="1" opacity=".15"/>
+    <circle cx="872" cy="806" r="1.2" opacity=".18"/>
+    <circle cx="1218" cy="222" r="1" opacity=".14"/>
+    <circle cx="386" cy="742" r="1.1" opacity=".16"/>
+    <circle cx="1516" cy="112" r="1.4" opacity=".22"/>
+    <circle cx="58" cy="306" r="1" opacity=".14"/>
+  </g>
+</svg>

@@ -1,0 +1,10 @@
+# dsh-yoimiya-theme bundle patch：为静态安装挂载主题插件行。
+#   dsh plugin --profile web add <本目录路径>
+#
+# 行名解析到本包：Host 半边是包 main（bundle/host.js，负责
+# /yoimiya-bg/* 资源路由），浏览器半边是 ./client 导出
+# （bundle/client.js），由客户端模块系统依据 package.json 里的
+# dsh.client 声明拾取。
+- insert:
+    - id: yoimiya-theme
+      name: dsh-yoimiya-theme

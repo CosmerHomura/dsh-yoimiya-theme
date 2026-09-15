@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900" role="img" aria-label="和纸昼：边缘暖光、波纹弧与金鱼剪影">
+  <title>和纸昼</title>
+  <defs>
+    <radialGradient id="dWarm" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#E8A04A" stop-opacity=".20"/>
+      <stop offset=".55" stop-color="#D08A3C" stop-opacity=".07"/>
+      <stop offset="1" stop-color="#C07A34" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="dRose" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#C4604A" stop-opacity=".16"/>
+      <stop offset="1" stop-color="#A04A3A" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- 金鱼剪影：体 + 叉尾 + 背鳍 + 眼 -->
+    <g id="goldfish">
+      <path d="M2.6 12.1c0-3 3.2-5.5 7.2-5.5 4 0 7.2 2.5 7.2 5.5 0 3-3.2 5.5-7.2 5.5-4 0-7.2-2.5-7.2-5.5Z"/>
+      <path d="M16.3 12c1.9-2.6 4.1-4.3 6.3-5-.7 2.2-1.2 3.7-2 5 .8 1.3 1.3 2.8 2 5-2.2-.7-4.4-2.4-6.3-5Z" opacity=".85"/>
+      <path d="M9.4 6.8c1.1-1.3 2.7-2 4.3-2.1-.8 1.1-1.3 1.9-1.5 2.7Z" opacity=".7"/>
+      <circle cx="6.9" cy="10.9" r="1.05" fill="#2A1C14"/>
+    </g>
+
+    <!-- 青海波：同心弧 -->
+    <g id="seigaiha" fill="none" stroke="#C98A4A" stroke-width="1">
+      <circle cx="0" cy="0" r="46"/>
+      <circle cx="0" cy="0" r="78"/>
+      <circle cx="0" cy="0" r="110"/>
+    </g>
+  </defs>
+
+  <!-- 1 · 边缘暖光 -->
+  <circle cx="1424" cy="168" r="245" fill="url(#dWarm)"/>
+  <circle cx="176" cy="768" r="225" fill="url(#dRose)"/>
+  <circle cx="836" cy="-40" r="300" fill="url(#dWarm)" opacity=".5"/>
+
+  <!-- 2 · 波纹弧：四角，避开中心 -->
+  <g opacity=".085">
+    <use href="#seigaiha" transform="translate(60,900)"/>
+    <use href="#seigaiha" transform="translate(1560,60) scale(.9)"/>
+    <use href="#seigaiha" transform="translate(1560,900) scale(.7)"/>
+  </g>
+
+  <!-- 3 · 金鱼剪影：边缘游动 -->
+  <g opacity=".085" fill="#B5502A">
+    <use href="#goldfish" transform="translate(1156,660) scale(3.6) rotate(-14)"/>
+    <use href="#goldfish" transform="translate(322,286) scale(2.4) rotate(16)"/>
+    <use href="#goldfish" transform="translate(1462,392) scale(1.9) rotate(-6)"/>
+  </g>
+
+  <!-- 4 · 极淡金线：和风框线感 -->
+  <g opacity=".05" stroke="#B58A4A" fill="none" stroke-width="1">
+    <path d="M0 96 H560"/>
+    <path d="M1120 812 H1600"/>
+    <path d="M1520 0 V300"/>
+    <path d="M60 620 V900"/>
+  </g>
+</svg>

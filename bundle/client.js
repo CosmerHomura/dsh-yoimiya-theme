@@ -1242,7 +1242,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
       // 构建立即版本标记：面板上显示出来，这样"跑的是哪一版"一眼可判。
       // 起因是反复出现"改了但界面没变"——而客户端与 Host 半边的生效代价不同
       // （前者刷新、后者必须完全重启），没有标记就只能靠猜。
-      const BUILD_TAG = 'v22';
+      const BUILD_TAG = 'v23';
 
       const PARTICLE_KEY = 'dsh-yoimiya-particles-v1';
       const PARTICLE_DEFAULT = { on: true, speed: 1, density: 1, burst: 1 };
@@ -2116,14 +2116,18 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
           await refresh();
         };
 
+        // 【必须先取出 File，再清空 input】。input.files 是活引用，value = ''
+        // 会把它一起清掉——先清空再判断 length，条件永远成立，函数直接返回，
+        // 表现为「选择器弹出来了、选了图、然后毫无反应」。这是本主题里
+        // 「不能加封面」的真正原因，添加歌曲那条路没踩到是因为它先读了 list[0]。
         coverPicker.addEventListener('change', () => {
-          const files = coverPicker.files;
+          const list = coverPicker.files;
+          const file = list !== undefined && list !== null && list.length > 0 ? list[0] : null;
           coverPicker.value = '';
-          if (files === undefined || files === null || files.length === 0) return;
-          if (coverFor === null) return;
+          if (file === null || coverFor === null) return;
           const song = coverFor;
           coverFor = null;
-          void uploadCover(song, files[0]);
+          void uploadCover(song, file);
         });
 
         const pickCover = (song) => {

@@ -725,7 +725,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-toggle[aria-pressed="true"] {
       // 默认关闭。
 
       const PARTICLE_KEY = 'dsh-yoimiya-particles-v1';
-      const PARTICLE_DEFAULT = { on: true, speed: 1, density: 1 };
+      const PARTICLE_DEFAULT = { on: true, speed: 1, density: 1, burst: 1 };
       const SPEED_STEPS = [
         { label: '慢', value: 0.6 },
         { label: '中', value: 1 },
@@ -735,6 +735,13 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-toggle[aria-pressed="true"] {
         { label: '疏', value: 0.5 },
         { label: '中', value: 1 },
         { label: '密', value: 1.9 },
+      ];
+      // 爆炸档同时放大「扩散半径」与「火星存活时长」——两者一起变才是"炸得大"，
+      // 只放大其中一个会显得不自然（大而短、或小而久）。
+      const BURST_STEPS = [
+        { label: '小', value: 0.7 },
+        { label: '中', value: 1 },
+        { label: '大', value: 1.5 },
       ];
 
       /** 读取偏好。存储被禁用或值损坏时静默回落到默认值。 */
@@ -807,26 +814,34 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-toggle[aria-pressed="true"] {
           const MAX_SPARKS = 900;
           let speed = 1;
           let density = 1;
+          let burstScale = 1;   // 与爆炸函数 burst() 区分开，避免重名
           let spawnAcc = 0;
           let raf = 0;
           let last = 0;
 
+          // 速度档作用于【升起】：先随机一个目标高度，再由「升多久」反推上升
+          // 速度。早先的写法把速度档乘在 dur 上、vy 却是独立随机的，结果是
+          // 调快档只让它提前炸开（炸得更低），升起速度纹丝不动。
           const spawnRocket = () => {
             const k = (Math.random() * HUES.length) | 0;
+            // 炸点：升至视口高度的 66%–92%，即炸在屏幕上方 8%–34% 处。
+            // 早先是 42%–68%（炸在 32%–58%），观感偏低、像在半空闷掉。
+            const riseH = H * (0.66 + Math.random() * 0.26);
+            const dur = (1.6 + Math.random() * 1.0) / speed;
             rockets.push({
               x: W * (0.06 + Math.random() * 0.88),
               y: H + 8,
               vx: (Math.random() - 0.5) * 26,
-              vy: -H * (0.42 + Math.random() * 0.26),
+              vy: -riseH / dur,
               life: 0,
-              dur: (1.5 + Math.random() * 0.9) / speed,
+              dur,
               hue: HUES[k],
             });
           };
 
           const burst = (r) => {
             const n = Math.round((16 + Math.random() * 22) * density);
-            const power = H * (0.055 + Math.random() * 0.05);
+            const power = H * (0.055 + Math.random() * 0.05) * burstScale;
             for (let i = 0; i < n; i++) {
               const ang = (i / n) * Math.PI * 2 + Math.random() * 0.25;
               const sp = power * (0.55 + Math.random() * 0.7);
@@ -835,7 +850,8 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-toggle[aria-pressed="true"] {
                 vx: Math.cos(ang) * sp,
                 vy: Math.sin(ang) * sp,
                 life: 0,
-                dur: (1.0 + Math.random() * 0.8) / speed,
+                // 火星寿命不含速度档（速度档只管升起），由爆炸档缩放
+                dur: (1.0 + Math.random() * 0.8) * burstScale,
                 hue: r.hue,
                 rad: 1.3,
               });
@@ -921,6 +937,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-toggle[aria-pressed="true"] {
             setPrefs: (prefs) => {
               speed = prefs.speed;
               density = prefs.density;
+              burstScale = prefs.burst;
             },
           };
         } catch (err) {
@@ -981,7 +998,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-toggle[aria-pressed="true"] {
         });
         onRow.append(onBtn);
 
-        const speedRow = row('速度');
+        const speedRow = row('升起速度');
         speedRow.append(group(SPEED_STEPS, () => prefs.speed, (v) => {
           prefs.speed = v;
           onChange(prefs);
@@ -993,7 +1010,13 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-toggle[aria-pressed="true"] {
           onChange(prefs);
         }));
 
-        panel.append(onRow, speedRow, densityRow);
+        const burstRow = row('爆炸');
+        burstRow.append(group(BURST_STEPS, () => prefs.burst, (v) => {
+          prefs.burst = v;
+          onChange(prefs);
+        }));
+
+        panel.append(onRow, speedRow, densityRow, burstRow);
 
         const btn = document.createElement('button');
         btn.type = 'button';

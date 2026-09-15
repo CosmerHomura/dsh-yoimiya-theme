@@ -637,6 +637,60 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-toggle[aria-pressed="true"] {
   background: rgba(181, 80, 42, 0.16);
   color: #B5502A;
 }
+
+/* ── 音乐控制（系统媒体会话）────────────────────────────────────── */
+.dsh-yoimiya-dock-divider {
+  height: 1px;
+  margin: 10px 0 9px;
+  background: rgba(224, 138, 60, 0.22);
+}
+.dsh-yoimiya-music-now {
+  max-width: 208px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: #B9AC9C;
+}
+.dsh-yoimiya-music-now[data-state="playing"] { color: #F0B068; }
+.dsh-yoimiya-music-now[data-state="idle"] { color: #8A7F72; }
+.dsh-yoimiya-music-bar {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.dsh-yoimiya-music-btn {
+  flex: 1;
+  border: 1px solid rgba(224, 138, 60, 0.28);
+  border-radius: 8px;
+  background: transparent;
+  color: #B9AC9C;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  padding: 5px 0;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.dsh-yoimiya-music-btn:hover {
+  color: #F0B068;
+  border-color: rgba(224, 138, 60, 0.60);
+  background: rgba(224, 138, 60, 0.12);
+}
+.dsh-yoimiya-music-btn:focus-visible {
+  outline: 2px solid rgba(224, 138, 60, 0.60);
+  outline-offset: 2px;
+}
+body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-divider { background: rgba(181, 80, 42, 0.20); }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-now { color: #6B5A4A; }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-now[data-state="playing"] { color: #B5502A; }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-now[data-state="idle"] { color: #7C6A56; }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-btn { border-color: rgba(181, 80, 42, 0.26); color: #6B5A4A; }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-btn:hover {
+  color: #B5502A;
+  border-color: rgba(181, 80, 42, 0.60);
+  background: rgba(181, 80, 42, 0.10);
+}
 `;
 
     // ══════════════════════════════════════════════════════════════
@@ -946,7 +1000,84 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-toggle[aria-pressed="true"] {
         }
       }
 
-      /** 右下角小面板：开关 / 速度 / 密度。 */
+      /**
+       * 音乐控制。浏览器碰不到 WinRT，真正的调用在 Host 半边的
+       * /yoimiya-bg/media 上；这里只负责展示与轮询。
+       * 没有播放器、没装 PowerShell、非 Windows——都只是安静地显示
+       * 「未检测到播放器」，不报错。
+       */
+      function createMusicControls() {
+        const wrap = document.createElement('div');
+        wrap.className = 'dsh-yoimiya-music';
+
+        const line = document.createElement('div');
+        line.className = 'dsh-yoimiya-music-now';
+        line.title = '来自系统媒体会话（GSMTC），任何播放器都适用';
+        line.textContent = '读取中…';
+
+        const bar = document.createElement('div');
+        bar.className = 'dsh-yoimiya-music-bar';
+
+        let busy = false;
+        let timer = 0;
+
+        const render = (r) => {
+          if (r === null || r.ok !== true) {
+            line.textContent = '未检测到播放器';
+            line.dataset.state = 'idle';
+            return;
+          }
+          const title = r.title || '未知曲目';
+          line.textContent = r.artist ? (title + ' — ' + r.artist) : title;
+          line.dataset.state = r.status === 'Playing' ? 'playing' : 'paused';
+        };
+
+        const send = async (action) => {
+          if (busy) return;
+          busy = true;
+          try {
+            const res = await fetch('/yoimiya-bg/media?action=' + action, { cache: 'no-store' });
+            render(await res.json());
+          } catch {
+            render(null);
+          } finally {
+            busy = false;
+          }
+        };
+
+        const mk = (glyph, label, action) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'dsh-yoimiya-music-btn';
+          b.textContent = glyph;
+          b.title = label;
+          b.setAttribute('aria-label', label);
+          b.addEventListener('click', () => { void send(action); });
+          bar.append(b);
+        };
+        mk('⏮', '上一首', 'prev');
+        mk('⏯', '播放 / 暂停', 'toggle');
+        mk('⏭', '下一首', 'next');
+
+        wrap.append(line, bar);
+
+        return {
+          node: wrap,
+          // 只在面板打开时轮询：关着的时候没必要每 3 秒起一次 PowerShell
+          // （一次约 0.8 秒，白烧 CPU）
+          startPolling: () => {
+            if (timer !== 0) return;
+            void send('status');
+            timer = window.setInterval(() => { void send('status'); }, 3000);
+          },
+          stopPolling: () => {
+            if (timer === 0) return;
+            window.clearInterval(timer);
+            timer = 0;
+          },
+        };
+      }
+      /** 右下角小面板：烟花四项 + 音乐控制。 */
       function createDock(prefs, onChange) {
         const dock = document.createElement('div');
         dock.className = 'dsh-yoimiya-dock';
@@ -1016,7 +1147,11 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-toggle[aria-pressed="true"] {
           onChange(prefs);
         }));
 
-        panel.append(onRow, speedRow, densityRow, burstRow);
+        const music = createMusicControls();
+        const divider = document.createElement('div');
+        divider.className = 'dsh-yoimiya-dock-divider';
+
+        panel.append(onRow, speedRow, densityRow, burstRow, divider, music.node);
 
         const btn = document.createElement('button');
         btn.type = 'button';
@@ -1036,6 +1171,8 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-toggle[aria-pressed="true"] {
         const setOpen = (open) => {
           panel.dataset.open = String(open);
           btn.setAttribute('aria-expanded', String(open));
+          if (open) music.startPolling();
+          else music.stopPolling();
         };
         setOpen(false);
 
@@ -1056,6 +1193,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-toggle[aria-pressed="true"] {
         document.body.append(dock);
 
         return () => {
+          music.stopPolling();
           document.removeEventListener('click', onDocClick);
           document.removeEventListener('keydown', onEsc);
           dock.remove();

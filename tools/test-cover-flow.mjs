@@ -177,3 +177,67 @@ calls.forEach((c) => console.log('  ' + c));
 console.log('');
 console.log('--- canvas 操作 ---');
 console.log('  ' + (seen.join(', ') || '(无)'));
+
+// ── 添加弹窗的裁切路径 ──────────────────────────────────────────
+// 这条路和封面弹窗【共用同一份裁切实现】（cropMetrics / clampCropPan /
+// paintCropView / renderCoverBlob），但接线是两处，所以两处都要走一遍：
+// 这轮把两处的 draw/render 都换成了共用函数，只测其中一处等于没测。
+function findAllByClass(node, cls, out = []) {
+  if (node.className && String(node.className).split(/\s+/).includes(cls)) out.push(node);
+  for (const c of node.children) findAllByClass(c, cls, out);
+  return out;
+}
+
+console.log('');
+console.log('--- 添加弹窗 → 裁切路径 ---');
+{
+  const addBtn = findByClass(body, 'dsh-yoimiya-music-addbtn');
+  console.log('  添加按钮:', addBtn !== null);
+  addBtn.click();
+  await new Promise((r) => setTimeout(r, 20));
+
+  const modals = findAllByClass(body, 'dsh-yoimiya-modal-back');
+  const addModal = modals.find(
+    (m) => m.dataset.open === 'true' && findAllByClass(m, 'dsh-yoimiya-drop').length >= 2,
+  );
+  console.log('  添加弹窗已打开:', addModal !== null);
+
+  const zones = addModal ? findAllByClass(addModal, 'dsh-yoimiya-drop') : [];
+  console.log('  拖放区数量:', zones.length, '(应为 2：歌曲 + 封面)');
+
+  const drop = (zone, name, type) =>
+    zone.fire('drop', {
+      preventDefault() {},
+      dataTransfer: { files: [{ name, type, size: 1000 }] },
+    });
+
+  drop(zones[0], 'b.mp3', 'audio/mpeg');
+  await new Promise((r) => setTimeout(r, 20));
+  console.log('  歌曲拖入后「添加」禁用:', findByText(addModal, '添加').disabled);
+
+  drop(zones[1], 'cover2.jpg', 'image/jpeg');
+  await new Promise((r) => setTimeout(r, 40));
+
+  const cropModal = modals.find(
+    (m) => m !== addModal && m.dataset.open === 'true' && findByText(m, '裁切封面') !== null,
+  );
+  console.log('  裁切弹窗已打开:', cropModal !== null);
+
+  const use = cropModal ? findByText(cropModal, '使用这张') : null;
+  console.log('  裁切确认按钮:', use !== null);
+  if (use !== null) {
+    use.click();
+    await new Promise((r) => setTimeout(r, 40));
+  }
+  console.log('  裁切后添加弹窗仍打开:', addModal.dataset.open);
+
+  const addConfirm = findByText(addModal, '添加');
+  console.log('  「添加」按钮文字:', addConfirm.textContent);
+  addConfirm.click();
+  await new Promise((r) => setTimeout(r, 60));
+  console.log('  添加后弹窗:', addModal.dataset.open);
+}
+
+console.log('');
+console.log('--- 全部 fetch 调用 ---');
+calls.forEach((c) => console.log('  ' + c));

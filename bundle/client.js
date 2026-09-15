@@ -1693,6 +1693,71 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
     const COVER_SIZE = 512;
     const CROP_FRAME = 224;
 
+    // ── 裁切几何与绘制：两个裁切界面共用这一份 ──────────────────────
+    // 添加歌曲的裁切步骤与封面弹窗的裁切视图原本各写了一遍实现，逐字重复到
+    // 连局部变量名都一样，于是同一个 bug 要修两遍。
+    // 这里修掉的正是其中一个：两份 draw() 都在【每次调用】时重设
+    // canvas.width/height，而 draw() 由 pointermove / wheel / 缩放滑块驱动
+    // ——等于拖动时每帧重建一次整块位图并重置上下文。
+    //
+    // 三个函数都按当前状态取参、自身不持有状态，所以两边的状态管理不用改动。
+
+    /** 图片在取景框坐标下的显示尺寸。 */
+    const cropMetrics = (img, base, zoom) => ({
+      w: img.width * base * zoom,
+      h: img.height * base * zoom,
+    });
+
+    /** 把平移量夹回图片边界内，返回夹好的 { ox, oy }。 */
+    const clampCropPan = (img, base, zoom, ox, oy) => {
+      const { w, h } = cropMetrics(img, base, zoom);
+      const maxX = Math.max(0, (w - CROP_FRAME) / 2);
+      const maxY = Math.max(0, (h - CROP_FRAME) / 2);
+      return {
+        ox: Math.min(maxX, Math.max(-maxX, ox)),
+        oy: Math.min(maxY, Math.max(-maxY, oy)),
+      };
+    };
+
+    /** 把取景框内容画到预览画布上。画布尺寸只在真的需要时才重设。 */
+    const paintCropView = (canvas, img, base, zoom, ox, oy) => {
+      const g = typeof canvas.getContext === 'function' ? canvas.getContext('2d') : null;
+      if (g === null) return;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const px = Math.round(CROP_FRAME * dpr);
+      if (canvas.width !== px || canvas.height !== px) {
+        canvas.width = px;
+        canvas.height = px;
+        // 重设尺寸会重置全部上下文状态（含 transform），必须放在其后
+        g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      g.clearRect(0, 0, CROP_FRAME, CROP_FRAME);
+      const { w, h } = cropMetrics(img, base, zoom);
+      g.drawImage(img, CROP_FRAME / 2 - w / 2 + ox, CROP_FRAME / 2 - h / 2 + oy, w, h);
+    };
+
+    /** 按同一套变换渲染出 COVER_SIZE 的输出方图。WebP 体积远小于同质量 JPEG。 */
+    const renderCoverBlob = (img, base, zoom, ox, oy) => new Promise((resolve) => {
+      const out = document.createElement('canvas');
+      out.width = COVER_SIZE;
+      out.height = COVER_SIZE;
+      const g = typeof out.getContext === 'function' ? out.getContext('2d') : null;
+      if (g === null || typeof out.toBlob !== 'function') {
+        resolve(null);
+        return;
+      }
+      const k = COVER_SIZE / CROP_FRAME;
+      const { w, h } = cropMetrics(img, base, zoom);
+      g.drawImage(
+        img,
+        COVER_SIZE / 2 - (w * k) / 2 + ox * k,
+        COVER_SIZE / 2 - (h * k) / 2 + oy * k,
+        w * k,
+        h * k,
+      );
+      out.toBlob((blob) => resolve(blob), 'image/webp', 0.9);
+    });
+
     function createCropDialog() {
       const back = document.createElement('div');
       back.className = 'dsh-yoimiya-modal-back dsh-yoimiya-crop-back';
@@ -1763,48 +1828,19 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
       let lastX = 0;
       let lastY = 0;
 
-      const clampPan = () => {
-        if (img === null) return;
-        const w = img.width * base * zoomV;
-        const h = img.height * base * zoomV;
-        const maxX = Math.max(0, (w - CROP_FRAME) / 2);
-        const maxY = Math.max(0, (h - CROP_FRAME) / 2);
-        ox = Math.min(maxX, Math.max(-maxX, ox));
-        oy = Math.min(maxY, Math.max(-maxY, oy));
-      };
-
       const draw = () => {
         if (img === null) return;
-        clampPan();
-        const g = typeof canvas.getContext === 'function' ? canvas.getContext('2d') : null;
-        if (g === null) return;
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        canvas.width = CROP_FRAME * dpr;
-        canvas.height = CROP_FRAME * dpr;
-        g.setTransform(dpr, 0, 0, dpr, 0, 0);
-        g.clearRect(0, 0, CROP_FRAME, CROP_FRAME);
-        const w = img.width * base * zoomV;
-        const h = img.height * base * zoomV;
-        g.drawImage(img, CROP_FRAME / 2 - w / 2 + ox, CROP_FRAME / 2 - h / 2 + oy, w, h);
+        const panned = clampCropPan(img, base, zoomV, ox, oy);
+        ox = panned.ox;
+        oy = panned.oy;
+        paintCropView(canvas, img, base, zoomV, ox, oy);
       };
 
-      // 输出与预览是同一套变换，只把整体乘上 SIZE/FRAME
-      const render = () => new Promise((resolve) => {
-        const out = document.createElement('canvas');
-        out.width = COVER_SIZE;
-        out.height = COVER_SIZE;
-        const g = typeof out.getContext === 'function' ? out.getContext('2d') : null;
-        if (g === null || typeof out.toBlob !== 'function') {
-          resolve(null);
-          return;
-        }
-        const k = COVER_SIZE / CROP_FRAME;
-        const w = img.width * base * zoomV * k;
-        const h = img.height * base * zoomV * k;
-        g.drawImage(img, COVER_SIZE / 2 - w / 2 + ox * k, COVER_SIZE / 2 - h / 2 + oy * k, w, h);
-        // WebP：体积远小于同质量 JPEG，且圆角缩略图不需要 alpha 之外的花样
-        out.toBlob((blob) => resolve(blob), 'image/webp', 0.9);
-      });
+      // 输出与预览共用同一套变换，只把整体乘上 SIZE/FRAME——那份换算在
+      // renderCoverBlob 里，与 paintCropView 共用 cropMetrics。
+      const render = () => (img === null
+        ? Promise.resolve(null)
+        : renderCoverBlob(img, base, zoomV, ox, oy));
 
       const finish = (blob) => {
         back.dataset.open = 'false';
@@ -2056,46 +2092,17 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
       let lastX = 0;
       let lastY = 0;
 
-      const clampPan = () => {
-        if (img === null) return;
-        const w = img.width * base * zoomV;
-        const h = img.height * base * zoomV;
-        const maxX = Math.max(0, (w - CROP_FRAME) / 2);
-        const maxY = Math.max(0, (h - CROP_FRAME) / 2);
-        ox = Math.min(maxX, Math.max(-maxX, ox));
-        oy = Math.min(maxY, Math.max(-maxY, oy));
-      };
-
       const draw = () => {
         if (img === null) return;
-        clampPan();
-        const g = typeof view.getContext === 'function' ? view.getContext('2d') : null;
-        if (g === null) return;
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        view.width = CROP_FRAME * dpr;
-        view.height = CROP_FRAME * dpr;
-        g.setTransform(dpr, 0, 0, dpr, 0, 0);
-        g.clearRect(0, 0, CROP_FRAME, CROP_FRAME);
-        const w = img.width * base * zoomV;
-        const h = img.height * base * zoomV;
-        g.drawImage(img, CROP_FRAME / 2 - w / 2 + ox, CROP_FRAME / 2 - h / 2 + oy, w, h);
+        const panned = clampCropPan(img, base, zoomV, ox, oy);
+        ox = panned.ox;
+        oy = panned.oy;
+        paintCropView(view, img, base, zoomV, ox, oy);
       };
 
-      const renderBlob = () => new Promise((resolve) => {
-        const out = document.createElement('canvas');
-        out.width = COVER_SIZE;
-        out.height = COVER_SIZE;
-        const g = typeof out.getContext === 'function' ? out.getContext('2d') : null;
-        if (g === null || typeof out.toBlob !== 'function' || img === null) {
-          resolve(null);
-          return;
-        }
-        const k = COVER_SIZE / CROP_FRAME;
-        const w = img.width * base * zoomV * k;
-        const h = img.height * base * zoomV * k;
-        g.drawImage(img, COVER_SIZE / 2 - w / 2 + ox * k, COVER_SIZE / 2 - h / 2 + oy * k, w, h);
-        out.toBlob((blob) => resolve(blob), 'image/webp', 0.9);
-      });
+      const renderBlob = () => (img === null
+        ? Promise.resolve(null)
+        : renderCoverBlob(img, base, zoomV, ox, oy));
 
       const releaseUrl = () => {
         if (url !== null && typeof URL.revokeObjectURL === 'function') URL.revokeObjectURL(url);

@@ -1728,6 +1728,13 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
           open,
           close: () => finish(null),
           isOpen: () => back.dataset.open === 'true',
+          // 环境是否具备裁切能力。缺 Image / createObjectURL / 2D 上下文时
+          // open() 会立刻 resolve(null)，那与"用户点了不用封面"是两件事，
+          // 必须能分辨，否则"点了没反应"会被误当成用户自己取消。
+          isUsable: () => typeof Image === 'function'
+            && typeof URL === 'object' && URL !== null
+            && typeof URL.createObjectURL === 'function'
+            && typeof document.createElement('canvas').getContext === 'function',
         };
       }
       function createAddDialog(crop, onSubmit) {
@@ -2110,7 +2117,10 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
           line.textContent = song.title + ' · 裁切封面…';
           const cropped = await crop.open(file);
           if (cropped === null) {
-            line.textContent = song.title + ' · 已取消裁切';
+            // null 有两个来源：用户点了「不用封面」，或环境不支持裁切
+            // （没有 Image / createObjectURL）。两者必须分辨，否则
+            // "点了没反应"会被误当成用户自己取消。
+            line.textContent = song.title + ' · ' + (crop.isUsable() ? '已取消裁切' : '环境不支持裁切');
             return;
           }
           line.textContent = song.title + ' · 上传封面…';

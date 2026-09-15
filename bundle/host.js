@@ -26,6 +26,11 @@ const assets = join(here, '..', 'assets');
 const mediaScript = join(here, '..', 'tools', 'media.ps1');
 const playersScript = join(here, '..', 'tools', 'players.ps1');
 
+// 用绝对路径：DSH 进程的 PATH 不保证含 System32，靠 'powershell.exe' 去解析
+// 会静默失败——而失败又只表现为「检测不到播放器」，极难排查。
+const systemRoot = process.env.SystemRoot ?? 'C:\\Windows';
+const POWERSHELL = join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+
 const ROUTES = [
   { path: '/yoimiya-bg/yoimiya-wide.jpg', file: join(assets, 'yoimiya-wide.jpg'), type: 'image/jpeg' },
   { path: '/yoimiya-bg/yoimiya.jpg', file: join(assets, 'yoimiya.jpg'), type: 'image/jpeg' },
@@ -46,7 +51,7 @@ const MEDIA_ACTIONS = new Set(['status', 'toggle', 'next', 'prev']);
 function runMedia(action) {
   return new Promise((resolve) => {
     execFile(
-      'powershell.exe',
+      POWERSHELL,
       ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
        '-File', mediaScript, '-Action', action],
       { timeout: 8000, windowsHide: true, maxBuffer: 64 * 1024, encoding: 'utf8' },
@@ -93,26 +98,36 @@ function mediaHandler(req, res) {
 const PLAYERS_PATH = '/yoimiya-bg/players';
 const PLAYER_IDS = new Set(['netease', 'qqmusic']);
 
-/** 跑一次播放器探测脚本。任何失败都回成空列表——没装就是没装，不是故障。 */
+/** 跑一次播放器探测脚本。返回 { players, reason, detail }。 */
 function detectPlayers() {
   return new Promise((resolve) => {
     execFile(
-      'powershell.exe',
+      POWERSHELL,
       ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', playersScript],
       { timeout: 10000, windowsHide: true, maxBuffer: 64 * 1024, encoding: 'utf8' },
-      (err, stdout) => {
+      (err, stdout, stderr) => {
         if (err) {
+          // 把原因带出去，别吞掉：以前这里一律回空列表，界面上「没装」和
+          // 「脚本跑不起来」长得一模一样，排查不了。
           console.warn('[yoimiya-theme] 播放器探测未执行成功：', err.message);
-          resolve([]);
+          resolve({ players: [], reason: 'spawn-failed', detail: String(err.message).slice(0, 200) });
           return;
         }
         const line = String(stdout).trim().split(/\r?\n/).filter(Boolean).pop();
         try {
           const parsed = JSON.parse(line);
-          resolve(Array.isArray(parsed?.players) ? parsed.players : []);
+          resolve({
+            players: Array.isArray(parsed?.players) ? parsed.players : [],
+            reason: null,
+            detail: null,
+          });
         } catch {
           console.warn('[yoimiya-theme] 播放器探测输出无法解析：', line);
-          resolve([]);
+          resolve({
+            players: [],
+            reason: 'bad-output',
+            detail: (line || String(stderr)).slice(0, 200),
+          });
         }
       },
     );
@@ -143,10 +158,11 @@ function launchPlayer(id, players) {
 
 /** 纯探测返回列表；带 launch 时先启动再返回最新状态（running 会变成 true）。 */
 function playersHandler(req, res, launchId) {
-  return detectPlayers().then((players) => {
+  return detectPlayers().then((found) => {
+    const { players, reason, detail } = found;
     const result = launchId === null
-      ? { ok: true, players }
-      : { ok: true, players, ...launchPlayer(launchId, players) };
+      ? { ok: true, players, reason, detail }
+      : { ok: true, players, reason, detail, ...launchPlayer(launchId, players) };
     const body = JSON.stringify(result);
     res.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8',

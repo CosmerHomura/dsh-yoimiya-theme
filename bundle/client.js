@@ -1139,11 +1139,20 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-player:hover:not(:disabled) {
         mk('⏭', '下一首', 'next');
 
         const renderPlayers = (result) => {
-          const list = result !== null && Array.isArray(result.players) ? result.players : [];
           players.textContent = '';
+          if (result === null) {
+            players.dataset.state = 'idle';
+            players.textContent = '检测接口不可达';
+            return;
+          }
+          const list = Array.isArray(result.players) ? result.players : [];
           if (list.length === 0) {
             players.dataset.state = 'idle';
-            players.textContent = '未检测到网易云 / QQ音乐';
+            // 把 host 侧的原因带出来。「这台机器上确实没装」和「脚本根本跑
+            // 不起来」是两件事，以前都显示成"未检测到"，等于无法排查。
+            players.textContent = typeof result.reason === 'string' && result.reason.length > 0
+              ? ('检测失败：' + result.reason)
+              : '未检测到网易云 / QQ音乐';
             return;
           }
           players.dataset.state = 'found';

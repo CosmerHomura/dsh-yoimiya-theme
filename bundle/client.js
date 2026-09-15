@@ -79,7 +79,7 @@ const WALL_BRIGHT = INTENSITY === 'calm' ? 1.06 : 1.14;
     // 两档不是同一组颜色的明暗翻转，而是独立取值：
     //   暗档底色取暖靛黑（非冷蓝黑，冷蓝会推高蓝通道且与焰橙视觉振动）
     //   橙金在暗底上提亮才可读、在纸底上压深才可读 → brand 是两个值
-    // 正文对比度（已核算）：暗 #EDE3D3/#1A1622 ≈ 13.9:1，亮 #33261C/#FAF3E8 ≈ 13.3:1
+    // 正文对比度（已核算）：暗 #EDE3D3/#1A1622 ≈ 13.9:1，亮 #33261C/#F3EADA ≈ 13.3:1
     // 次要文本 6–8:1，占位符 ≥ 4.5:1。详见 DESIGN.md 验收清单。
 
     /** light / dark 值对。validateOverrides 要求每个 token 都是这对形状。 */
@@ -120,14 +120,14 @@ const WALL_BRIGHT = INTENSITY === 'calm' ? 1.06 : 1.14;
 
       // ── 品牌 ──────────────────────────────────────────────────
       '--dsw-alias-brand-primary': p('#B5502A', '#E08A3C'),
-      '--dsw-alias-brand-primary-invert': p('#FAF3E8', '#14111C'),
+      '--dsw-alias-brand-primary-invert': p('#F3EADA', '#14111C'),
       '--dsw-alias-brand-text': p('#9E4523', '#EDBE86'),
 
       // ── 文字 ──────────────────────────────────────────────────
       '--dsw-alias-label-primary': p('#33261C', '#EDE3D3'),
       '--dsw-alias-label-primary-bluish': p('#3A2C20', '#EFE6D6'),
       '--dsw-alias-label-primary-dimmed': p('#6B5A4A', '#B9AC9C'),
-      '--dsw-alias-label-primary-foreground': p('#FAF3E8', '#14111C'),
+      '--dsw-alias-label-primary-foreground': p('#F3EADA', '#14111C'),
       '--dsw-alias-label-primary-inverted': p('#FFFBF3', '#1A1622'),
       '--dsw-alias-label-secondary': p('#6B5A4A', '#B9AC9C'),
       // tertiary/caption 就是占位符与辅助文字那一层，必须守住 4.5:1（亮档实测 4.70）。
@@ -266,7 +266,7 @@ const WALL_BRIGHT = INTENSITY === 'calm' ? 1.06 : 1.14;
       `radial-gradient(circle at 8% 84%, rgba(196,96,74,${a(0.10)}) 0%, rgba(196,96,74,0) 22%)`,
     ];
     if (SCENE) lightBg.push(`url('${BG}/bg-day.svg')`);
-    lightBg.push('linear-gradient(165deg, #FDF8F0 0%, #FAF3E8 50%, #F7EFE1 100%)');
+    lightBg.push('linear-gradient(165deg, #F8F1E4 0%, #F3EADA 50%, #EFE4D2 100%)');
     const layerList = (arr) => arr.join(',\n    ');
 
     const css = `
@@ -292,7 +292,7 @@ body[data-ds-dark-theme] {
 }
 
 body:not([data-ds-dark-theme]) {
-  background-color: #FAF3E8 !important;
+  background-color: #F3EADA !important;
   background-image:
     ${layerList(lightBg)} !important;
   background-size: cover !important;
@@ -364,7 +364,7 @@ body:not([data-ds-dark-theme])::before {
   padding: 14px 16px 22px;
 }
 body:not([data-ds-dark-theme]) [data-chat-flow] {
-  background: rgba(255,252,246,0.74);
+  background: rgba(248,241,229,0.74);
   border-color: rgba(120,80,40,0.12);
 }
 
@@ -375,7 +375,7 @@ body:not([data-ds-dark-theme]) [data-chat-flow] {
   border-radius: 18px !important;
 }
 body:not([data-ds-dark-theme]) [data-composer-card] {
-  background: rgba(255,252,246,0.88) !important;
+  background: rgba(248,241,229,0.88) !important;
   border-color: rgba(120,80,40,0.22) !important;
 }
 
@@ -412,13 +412,13 @@ body[data-ds-dark-theme]::after {
   background-image: radial-gradient(ellipse 72% 60% at 50% 46%, rgba(12,10,18,${a(0.90)}) 0%, rgba(12,10,18,${a(0.62)}) 55%, rgba(12,10,18,0) 100%);
 }
 body:not([data-ds-dark-theme])::after {
-  background-image: radial-gradient(ellipse 74% 62% at 50% 46%, rgba(255,252,246,${a(0.95)}) 0%, rgba(255,252,246,${a(0.60)}) 58%, rgba(255,252,246,0) 100%);
+  background-image: radial-gradient(ellipse 74% 62% at 50% 46%, rgba(248,241,229,${a(0.82)}) 0%, rgba(248,241,229,${a(0.52)}) 58%, rgba(248,241,229,0) 100%);
 }
 body[data-ds-dark-theme]:has([data-phase="hero"])::after {
   background-image: linear-gradient(96deg, rgba(12,10,18,${a(0.06)}) 0%, rgba(12,10,18,${a(0.12)}) 24%, rgba(12,10,18,${a(0.46)}) 34%, rgba(12,10,18,${a(0.75)}) 40%, rgba(12,10,18,${a(0.87)}) 52%, rgba(12,10,18,${a(0.89)}) 100%);
 }
 body:not([data-ds-dark-theme]):has([data-phase="hero"])::after {
-  background-image: linear-gradient(96deg, rgba(255,252,246,${a(0.22)}) 0%, rgba(255,252,246,${a(0.30)}) 24%, rgba(255,252,246,${a(0.60)}) 34%, rgba(255,252,246,${a(0.85)}) 40%, rgba(255,252,246,${a(0.92)}) 52%, rgba(255,252,246,${a(0.94)}) 100%);
+  background-image: linear-gradient(96deg, rgba(248,241,229,${a(0.22)}) 0%, rgba(248,241,229,${a(0.30)}) 24%, rgba(248,241,229,${a(0.60)}) 34%, rgba(248,241,229,${a(0.85)}) 40%, rgba(248,241,229,${a(0.92)}) 52%, rgba(248,241,229,${a(0.94)}) 100%);
 }
 /* 会话卡底面降到 0.30 之后，正文可能压在壁纸的高亮光柱上。给卡片内的文字
    加一层极轻的投影，让它在亮底上依然清晰——这样才敢把卡片继续做透。

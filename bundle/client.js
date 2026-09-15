@@ -337,11 +337,11 @@ body::before {
    下层程序化天空，看着像 bug。这是第一版的行为，实测长对话下观感更稳。 */
 body[data-ds-dark-theme]:has([data-phase="active"])::before,
 body[data-ds-dark-theme]:has([data-phase="settling"])::before {
-  opacity: .34;
+  opacity: .62;
 }
 body:not([data-ds-dark-theme]):has([data-phase="active"])::before,
 body:not([data-ds-dark-theme]):has([data-phase="settling"])::before {
-  opacity: .28;
+  opacity: .52;
 }
 
 /* 亮档：立绘是dusk 色调，加一层和纸洗色，让它像印在纸上而不是贴在屏幕上 */
@@ -358,7 +358,7 @@ body:not([data-ds-dark-theme])::before {
    子树里就会以本元素为参照定位（实测：设置面板跑到侧边栏里展开）。
    半透明底面本身已足够，模糊只是锦上添花，不值得用定位正确性去换。 */
 [data-chat-flow] {
-  background: rgba(20,17,28,0.60);
+  background: rgba(20,17,28,0.52);
   border: 1px solid rgba(240,200,140,0.10);
   border-radius: 18px;
   padding: 14px 16px 22px;
@@ -409,7 +409,7 @@ body:not([data-ds-dark-theme]) [data-composer-placeholder] { color: #7C6A56 !imp
   background-position: center center;
 }
 body[data-ds-dark-theme] .dsh-yoimiya-scrim {
-  background-image: radial-gradient(ellipse 72% 60% at 50% 46%, rgba(12,10,18,${a(0.90)}) 0%, rgba(12,10,18,${a(0.62)}) 55%, rgba(12,10,18,0) 100%);
+  background-image: radial-gradient(ellipse 72% 60% at 50% 46%, rgba(12,10,18,${a(0.62)}) 0%, rgba(12,10,18,${a(0.42)}) 55%, rgba(12,10,18,0) 100%);
 }
 body:not([data-ds-dark-theme]) .dsh-yoimiya-scrim {
   background-image: radial-gradient(ellipse 74% 62% at 50% 46%, rgba(248,241,229,${a(0.82)}) 0%, rgba(248,241,229,${a(0.52)}) 58%, rgba(248,241,229,0) 100%);
@@ -877,8 +877,20 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-player:hover:not(:disabled) {
         }
       }
 
-      /** 阅读遮罩：从 CSS 伪元素改为真实元素，好让粒子层能叠在它之上。 */
+      /**
+       * 阅读遮罩：从 CSS 伪元素改为真实元素，好让粒子层能叠在它之上。
+       *
+       * 必须是幂等的。伪元素天然只有一层，真实元素不是——apply() 可能被重复
+       * 执行（重载或热更新时旧实例若没被干净卸载），残留的旧节点会叠加，
+       * 两层 0.62 的遮罩叠起来就是 0.86 的暗，观感是"背景忽然黑了好多"。
+       */
+      function dropStale(selector) {
+        const stale = document.querySelectorAll(selector);
+        for (let i = 0; i < stale.length; i++) stale[i].remove();
+      }
+
       function mountScrim() {
+        dropStale('.dsh-yoimiya-scrim');
         const el = document.createElement('div');
         el.className = 'dsh-yoimiya-scrim';
         el.setAttribute('aria-hidden', 'true');
@@ -1334,6 +1346,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-player:hover:not(:disabled) {
         };
 
         dock.append(fxPanel, musicPanel, btns);
+        dropStale('.dsh-yoimiya-dock');
         document.body.append(dock);
 
         const onDocClick = (e) => {
@@ -1359,6 +1372,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-player:hover:not(:disabled) {
       let disposeResize = null;
 
       if (particles !== null) {
+        dropStale('.dsh-yoimiya-particles');
         document.body.append(particles.canvas);
         particles.setPrefs(particlePrefs);
         if (particlePrefs.on) particles.start();

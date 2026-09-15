@@ -17,13 +17,14 @@
 // 路由注册失败（例如同一 profile 里已有另一份实例在服务同名路由）只跳过、
 // 不抛错，避免整个 profile 加载失败。
 import { readFile } from 'node:fs/promises';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const assets = join(here, '..', 'assets');
 const mediaScript = join(here, '..', 'tools', 'media.ps1');
+const playersScript = join(here, '..', 'tools', 'players.ps1');
 
 const ROUTES = [
   { path: '/yoimiya-bg/yoimiya-wide.jpg', file: join(assets, 'yoimiya-wide.jpg'), type: 'image/jpeg' },
@@ -89,6 +90,73 @@ function mediaHandler(req, res) {
   });
 }
 
+const PLAYERS_PATH = '/yoimiya-bg/players';
+const PLAYER_IDS = new Set(['netease', 'qqmusic']);
+
+/** 跑一次播放器探测脚本。任何失败都回成空列表——没装就是没装，不是故障。 */
+function detectPlayers() {
+  return new Promise((resolve) => {
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', playersScript],
+      { timeout: 10000, windowsHide: true, maxBuffer: 64 * 1024, encoding: 'utf8' },
+      (err, stdout) => {
+        if (err) {
+          console.warn('[yoimiya-theme] 播放器探测未执行成功：', err.message);
+          resolve([]);
+          return;
+        }
+        const line = String(stdout).trim().split(/\r?\n/).filter(Boolean).pop();
+        try {
+          const parsed = JSON.parse(line);
+          resolve(Array.isArray(parsed?.players) ? parsed.players : []);
+        } catch {
+          console.warn('[yoimiya-theme] 播放器探测输出无法解析：', line);
+          resolve([]);
+        }
+      },
+    );
+  });
+}
+
+/**
+ * 启动指定播放器。
+ *
+ * 可执行文件路径由服务端自己探测得出，**不接受客户端传来的路径**——否则这个
+ * 路由就等于一个任意程序启动器。客户端只能传 id，且 id 必须落在白名单里。
+ *
+ * detached + unref：播放器不能挂在 DSH 进程下，否则 DSH 一退出就被带走。
+ */
+function launchPlayer(id, players) {
+  const found = players.find((p) => p.id === id);
+  if (found === undefined) return { ok: false, reason: 'not-installed' };
+  if (found.running === true) return { ok: true, launched: false, reason: 'already-running' };
+  try {
+    const child = spawn(found.exe, [], { detached: true, stdio: 'ignore' });
+    child.unref();
+    return { ok: true, launched: true };
+  } catch (err) {
+    console.warn('[yoimiya-theme] 启动播放器失败：', err?.message ?? err);
+    return { ok: false, reason: 'spawn-failed' };
+  }
+}
+
+/** 纯探测返回列表；带 launch 时先启动再返回最新状态（running 会变成 true）。 */
+function playersHandler(req, res, launchId) {
+  return detectPlayers().then((players) => {
+    const result = launchId === null
+      ? { ok: true, players }
+      : { ok: true, players, ...launchPlayer(launchId, players) };
+    const body = JSON.stringify(result);
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Length': Buffer.byteLength(body),
+      'Cache-Control': 'no-store',
+    });
+    res.end(body);
+  });
+}
+
 export default {
   inject: ['webServer'],
   apply(ctx) {
@@ -138,6 +206,27 @@ export default {
       console.warn(`[yoimiya-theme] 路由 ${MEDIA_PATH} 已被其他实例占用，跳过:`, e?.message ?? e);
     }
 
-    console.log(`[yoimiya-theme] Host 半边就绪（${registered}/${ROUTES.length + 1} 条路由）`);
+    try {
+      const disposePlayers = ctx.webServer.register({
+        kind: 'exact',
+        path: PLAYERS_PATH,
+        handler: (req, res) => {
+          let launchId = null;
+          try {
+            const asked = new URL(req.url ?? '/', 'http://localhost').searchParams.get('launch');
+            if (asked !== null && PLAYER_IDS.has(asked)) launchId = asked;
+          } catch {
+            /* URL 畸形时按纯探测处理 */
+          }
+          return playersHandler(req, res, launchId);
+        },
+      });
+      ctx.effect(() => disposePlayers);
+      registered += 1;
+    } catch (e) {
+      console.warn(`[yoimiya-theme] 路由 ${PLAYERS_PATH} 已被其他实例占用，跳过:`, e?.message ?? e);
+    }
+
+    console.log(`[yoimiya-theme] Host 半边就绪（${registered}/${ROUTES.length + 2} 条路由）`);
   },
 };

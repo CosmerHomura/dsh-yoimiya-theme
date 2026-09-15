@@ -691,6 +691,61 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-btn:hover {
   border-color: rgba(181, 80, 42, 0.60);
   background: rgba(181, 80, 42, 0.10);
 }
+
+/* ── 控件坞：两个并列按钮 ─────────────────────────────────────────── */
+.dsh-yoimiya-dock-btns {
+  display: flex;
+  gap: 8px;
+}
+.dsh-yoimiya-dock-note {
+  max-width: 208px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #8A7F72;
+}
+
+/* ── 播放器探测与启动 ─────────────────────────────────────────────── */
+.dsh-yoimiya-music-players {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+  font-size: 11px;
+  color: #8A7F72;
+}
+.dsh-yoimiya-player {
+  border: 1px solid rgba(224, 138, 60, 0.28);
+  border-radius: 8px;
+  background: transparent;
+  color: #B9AC9C;
+  font: inherit;
+  font-size: 11px;
+  padding: 4px 9px;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.dsh-yoimiya-player:hover:not(:disabled) {
+  color: #F0B068;
+  border-color: rgba(224, 138, 60, 0.60);
+  background: rgba(224, 138, 60, 0.12);
+}
+.dsh-yoimiya-player:disabled {
+  cursor: default;
+  opacity: .55;
+  border-color: rgba(224, 138, 60, 0.18);
+}
+.dsh-yoimiya-player:focus-visible {
+  outline: 2px solid rgba(224, 138, 60, 0.60);
+  outline-offset: 2px;
+}
+body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-note { color: #7C6A56; }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-players { color: #7C6A56; }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-player { border-color: rgba(181, 80, 42, 0.26); color: #6B5A4A; }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-player:hover:not(:disabled) {
+  color: #B5502A;
+  border-color: rgba(181, 80, 42, 0.60);
+  background: rgba(181, 80, 42, 0.10);
+}
 `;
 
     // ══════════════════════════════════════════════════════════════
@@ -1000,12 +1055,20 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-btn:hover {
         }
       }
 
-      /**
-       * 音乐控制。浏览器碰不到 WinRT，真正的调用在 Host 半边的
-       * /yoimiya-bg/media 上；这里只负责展示与轮询。
-       * 没有播放器、没装 PowerShell、非 Windows——都只是安静地显示
-       * 「未检测到播放器」，不报错。
+            /**
+       * 音乐面板。三件事：
+       *   1. 探测本机装没装网易云 / QQ音乐（Host 侧读注册表卸载项 + 常见路径）
+       *   2. 一键后台启动（只传 id，可执行文件路径由服务端自己探测——否则这个
+       *      路由就成了任意程序启动器）
+       *   3. 控制当前媒体会话（GSMTC，任何播放器都适用）
+       *
+       * 【刻意不做播放列表】两家都没有正规的本地接口：拿歌单只能逆向它们的
+       * 私有存储（客户端一更新就可能失效）或用非官方 API 带登录凭据（违反其
+       * 使用条款）。本主题要公开发布，把这类代码放进 MIT 仓库，风险与收益
+       * 完全不成比例。
        */
+      const PLAYER_LABEL = { netease: '网易云音乐', qqmusic: 'QQ音乐' };
+
       function createMusicControls() {
         const wrap = document.createElement('div');
         wrap.className = 'dsh-yoimiya-music';
@@ -1017,6 +1080,10 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-btn:hover {
 
         const bar = document.createElement('div');
         bar.className = 'dsh-yoimiya-music-bar';
+
+        const players = document.createElement('div');
+        players.className = 'dsh-yoimiya-music-players';
+        players.textContent = '检测播放器…';
 
         let busy = false;
         let timer = 0;
@@ -1059,15 +1126,58 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-btn:hover {
         mk('⏯', '播放 / 暂停', 'toggle');
         mk('⏭', '下一首', 'next');
 
-        wrap.append(line, bar);
+        const renderPlayers = (result) => {
+          const list = result !== null && Array.isArray(result.players) ? result.players : [];
+          players.textContent = '';
+          if (list.length === 0) {
+            players.dataset.state = 'idle';
+            players.textContent = '未检测到网易云 / QQ音乐';
+            return;
+          }
+          players.dataset.state = 'found';
+          list.forEach((p) => {
+            const label = PLAYER_LABEL[p.id] || p.id;
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'dsh-yoimiya-player';
+            b.textContent = p.running === true ? (label + ' · 运行中') : label;
+            b.title = p.running === true ? '已经在运行' : ('后台启动 ' + label);
+            b.disabled = p.running === true;
+            b.addEventListener('click', () => { void launch(p.id); });
+            players.append(b);
+          });
+        };
+
+        const probe = async () => {
+          try {
+            const res = await fetch('/yoimiya-bg/players', { cache: 'no-store' });
+            renderPlayers(await res.json());
+          } catch {
+            renderPlayers(null);
+          }
+        };
+
+        const launch = async (id) => {
+          try {
+            const res = await fetch('/yoimiya-bg/players?launch=' + encodeURIComponent(id), { cache: 'no-store' });
+            const r = await res.json();
+            renderPlayers(r);
+            // 刚启动的播放器要几秒才注册媒体会话，稍后再取一次状态
+            if (r.launched === true) window.setTimeout(() => { void send('status'); }, 2500);
+          } catch {
+            renderPlayers(null);
+          }
+        };
+
+        wrap.append(line, bar, players);
 
         return {
           node: wrap,
-          // 只在面板打开时轮询：关着的时候没必要每 3 秒起一次 PowerShell
-          // （一次约 0.8 秒，白烧 CPU）
+          // 只在面板打开时轮询：单次调用约 0.8 秒，关着还常驻轮询是白烧 CPU
           startPolling: () => {
             if (timer !== 0) return;
             void send('status');
+            void probe();
             timer = window.setInterval(() => { void send('status'); }, 3000);
           },
           stopPolling: () => {
@@ -1077,17 +1187,40 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-btn:hover {
           },
         };
       }
-      /** 右下角小面板：烟花四项 + 音乐控制。 */
-      function createDock(prefs, onChange) {
+
+      const ICON_FIREWORK = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" '
+        + 'stroke="currentColor" stroke-width="1.6" stroke-linecap="round">'
+        + '<path d="M12 3.5v4"/><path d="M12 20.5v-3"/>'
+        + '<path d="M4.5 12h3"/><path d="M16.5 12h3"/>'
+        + '<path d="M7 7l2 2"/><path d="M17 7l-2 2"/>'
+        + '<circle cx="12" cy="12" r="4"/>'
+        + '<circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/></svg>';
+
+      const ICON_MUSIC = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" '
+        + 'stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'
+        + '<path d="M9 18V6.5l10-2V16"/>'
+        + '<circle cx="6.6" cy="18" r="2.6"/>'
+        + '<circle cx="16.6" cy="16" r="2.6"/></svg>';
+
+      /**
+       * 右下角控件坞：两个独立按钮，各自一个面板，同时只开一个。
+       * 音乐是独立按钮而不是塞进烟花面板——两件事没有关系，塞在一起只会让人
+       * 找不到。
+       */
+      function createDock(prefs, onChange, particleControls) {
         const dock = document.createElement('div');
         dock.className = 'dsh-yoimiya-dock';
 
-        const panel = document.createElement('div');
-        panel.className = 'dsh-yoimiya-dock-panel';
-        panel.setAttribute('role', 'group');
-        panel.setAttribute('aria-label', '烟花效果');
+        const mkPanel = (label) => {
+          const p = document.createElement('div');
+          p.className = 'dsh-yoimiya-dock-panel';
+          p.dataset.open = 'false';
+          p.setAttribute('role', 'group');
+          p.setAttribute('aria-label', label);
+          return p;
+        };
 
-        const row = (label) => {
+        const mkRow = (label) => {
           const r = document.createElement('div');
           r.className = 'dsh-yoimiya-dock-row';
           const l = document.createElement('span');
@@ -1097,7 +1230,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-btn:hover {
           return r;
         };
 
-        const group = (steps, current, pick) => {
+        const mkGroup = (steps, current, pick) => {
           const seg = document.createElement('span');
           seg.className = 'dsh-yoimiya-seg';
           const buttons = steps.map((s) => {
@@ -1115,82 +1248,102 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-btn:hover {
           return seg;
         };
 
-        const onRow = row('烟花');
-        const onBtn = document.createElement('button');
-        onBtn.type = 'button';
-        onBtn.className = 'dsh-yoimiya-dock-toggle';
-        onBtn.textContent = prefs.on ? '开' : '关';
-        onBtn.setAttribute('aria-pressed', String(prefs.on));
-        onBtn.addEventListener('click', () => {
-          prefs.on = !prefs.on;
+        // ── 烟花面板 ──
+        const fxPanel = mkPanel('烟花效果');
+        if (particleControls) {
+          const onRow = mkRow('烟花');
+          const onBtn = document.createElement('button');
+          onBtn.type = 'button';
+          onBtn.className = 'dsh-yoimiya-dock-toggle';
           onBtn.textContent = prefs.on ? '开' : '关';
           onBtn.setAttribute('aria-pressed', String(prefs.on));
-          onChange(prefs);
-        });
-        onRow.append(onBtn);
+          onBtn.addEventListener('click', () => {
+            prefs.on = !prefs.on;
+            onBtn.textContent = prefs.on ? '开' : '关';
+            onBtn.setAttribute('aria-pressed', String(prefs.on));
+            onChange(prefs);
+          });
+          onRow.append(onBtn);
 
-        const speedRow = row('升起速度');
-        speedRow.append(group(SPEED_STEPS, () => prefs.speed, (v) => {
-          prefs.speed = v;
-          onChange(prefs);
-        }));
+          const speedRow = mkRow('升起速度');
+          speedRow.append(mkGroup(SPEED_STEPS, () => prefs.speed, (v) => {
+            prefs.speed = v;
+            onChange(prefs);
+          }));
 
-        const densityRow = row('密度');
-        densityRow.append(group(DENSITY_STEPS, () => prefs.density, (v) => {
-          prefs.density = v;
-          onChange(prefs);
-        }));
+          const densityRow = mkRow('密度');
+          densityRow.append(mkGroup(DENSITY_STEPS, () => prefs.density, (v) => {
+            prefs.density = v;
+            onChange(prefs);
+          }));
 
-        const burstRow = row('爆炸');
-        burstRow.append(group(BURST_STEPS, () => prefs.burst, (v) => {
-          prefs.burst = v;
-          onChange(prefs);
-        }));
+          const burstRow = mkRow('爆炸');
+          burstRow.append(mkGroup(BURST_STEPS, () => prefs.burst, (v) => {
+            prefs.burst = v;
+            onChange(prefs);
+          }));
 
+          fxPanel.append(onRow, speedRow, densityRow, burstRow);
+        } else {
+          const note = document.createElement('div');
+          note.className = 'dsh-yoimiya-dock-note';
+          note.textContent = '当前环境不支持画布，粒子层已跳过';
+          fxPanel.append(note);
+        }
+
+        // ── 音乐面板 ──
+        const musicPanel = mkPanel('音乐');
         const music = createMusicControls();
-        const divider = document.createElement('div');
-        divider.className = 'dsh-yoimiya-dock-divider';
+        musicPanel.append(music.node);
 
-        panel.append(onRow, speedRow, densityRow, burstRow, divider, music.node);
+        // ── 按钮 ──
+        const btns = document.createElement('div');
+        btns.className = 'dsh-yoimiya-dock-btns';
 
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'dsh-yoimiya-dock-btn';
-        btn.title = '宵宫主题 · 烟花';
-        btn.setAttribute('aria-label', '烟花效果设置');
-        btn.setAttribute('aria-expanded', 'false');
-        // 金鱼线描，与侧边栏品牌 mark 同一支笔触
-        btn.innerHTML = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" '
-          + 'stroke="currentColor" stroke-width="1.6" stroke-linecap="round">'
-          + '<path d="M12 3.5v4"/><path d="M12 20.5v-3"/>'
-          + '<path d="M4.5 12h3"/><path d="M16.5 12h3"/>'
-          + '<path d="M7 7l2 2"/><path d="M17 7l-2 2"/>'
-          + '<circle cx="12" cy="12" r="4"/>'
-          + '<circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/></svg>';
+        const mkBtn = (key, svg, label) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'dsh-yoimiya-dock-btn';
+          b.title = label;
+          b.setAttribute('aria-label', label);
+          b.setAttribute('aria-expanded', 'false');
+          b.innerHTML = svg;
+          b.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setOpen(key, panelOf(key).dataset.open !== 'true');
+          });
+          btns.append(b);
+          return b;
+        };
 
-        const setOpen = (open) => {
-          panel.dataset.open = String(open);
-          btn.setAttribute('aria-expanded', String(open));
-          if (open) music.startPolling();
+        const panels = { fx: fxPanel, music: musicPanel };
+        const panelOf = (key) => panels[key];
+        const buttons = {
+          fx: mkBtn('fx', ICON_FIREWORK, '烟花效果设置'),
+          music: mkBtn('music', ICON_MUSIC, '音乐'),
+        };
+
+        const setOpen = (key, open) => {
+          Object.keys(panels).forEach((k) => {
+            const on = k === key && open;
+            panels[k].dataset.open = String(on);
+            buttons[k].setAttribute('aria-expanded', String(on));
+          });
+          if (open && key === 'music') music.startPolling();
           else music.stopPolling();
         };
-        setOpen(false);
 
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          setOpen(panel.dataset.open !== 'true');
-        });
+        dock.append(fxPanel, musicPanel, btns);
+        document.body.append(dock);
+
         const onDocClick = (e) => {
-          if (!dock.contains(e.target)) setOpen(false);
+          if (!dock.contains(e.target)) setOpen(null, false);
         };
         const onEsc = (e) => {
-          if (e.key === 'Escape') setOpen(false);
+          if (e.key === 'Escape') setOpen(null, false);
         };
         document.addEventListener('click', onDocClick);
         document.addEventListener('keydown', onEsc);
-
-        dock.append(panel, btn);
-        document.body.append(dock);
 
         return () => {
           music.stopPolling();
@@ -1225,12 +1378,14 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-btn:hover {
         document.addEventListener('visibilitychange', onVisibility);
       }
 
-      const disposeDock = particles === null ? () => {} : createDock(particlePrefs, (next) => {
+      // 控件坞始终挂载：音乐控制不依赖粒子层，粒子不可用时只是少一个面板
+      const disposeDock = createDock(particlePrefs, (next) => {
         saveParticlePrefs(next);
+        if (particles === null) return;
         particles.setPrefs(next);
         if (next.on) particles.start();
         else particles.stop();
-      });
+      }, particles !== null);
 
       ctx.effect(() => () => {
         if (typeof disposeDock === 'function') disposeDock();
@@ -1240,7 +1395,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-btn:hover {
           particles.canvas.remove();
         }
         scrimEl.remove();
-      }, 'yoimiya-theme: fireworks');
+      }, 'yoimiya-theme: dock');
 
       // 供使用者写自己的叠加 CSS：html[data-dsh-yoimiya="on"] { ... }
       document.documentElement.setAttribute('data-dsh-yoimiya', 'on');

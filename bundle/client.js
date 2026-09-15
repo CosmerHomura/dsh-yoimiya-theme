@@ -1127,6 +1127,31 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-build { color: rgba(124, 106, 86, 0.
   border-bottom: 1px solid rgba(224, 138, 60, 0.18);
 }
 body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list { border-bottom-color: rgba(181, 80, 42, 0.16); }
+
+/* 曲目列表【从侧方展开】：面板锚在右下角，向左侧展开比上下生长更稳——
+   不挤压播放控件，也不受面板高度限制。超长时在自身内部滚动。 */
+.dsh-yoimiya-music { position: relative; }
+.dsh-yoimiya-music-list {
+  position: absolute;
+  right: calc(100% + 10px);
+  bottom: 0;
+  width: 212px;
+  max-height: min(300px, 60vh);
+  overflow-y: auto;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid rgba(224, 138, 60, 0.30);
+  border-radius: 12px;
+  background: rgba(24, 18, 30, 0.97);
+  box-shadow: 0 14px 34px rgba(10, 6, 16, 0.5);
+}
+/* 侧栏里的行不再需要分隔线 */
+.dsh-yoimiya-music-list .dsh-yoimiya-music-row { border-bottom: 0; }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
+  border-color: rgba(181, 80, 42, 0.28);
+  background: rgba(250, 244, 234, 0.99);
+  box-shadow: 0 14px 34px rgba(90, 60, 30, 0.24);
+}
 `;
 
     // ══════════════════════════════════════════════════════════════
@@ -1217,7 +1242,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list { border-bottom-color: rg
       // 构建立即版本标记：面板上显示出来，这样"跑的是哪一版"一眼可判。
       // 起因是反复出现"改了但界面没变"——而客户端与 Host 半边的生效代价不同
       // （前者刷新、后者必须完全重启），没有标记就只能靠猜。
-      const BUILD_TAG = 'v21';
+      const BUILD_TAG = 'v22';
 
       const PARTICLE_KEY = 'dsh-yoimiya-particles-v1';
       const PARTICLE_DEFAULT = { on: true, speed: 1, density: 1, burst: 1 };
@@ -1996,13 +2021,31 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list { border-bottom-color: rg
           setCurrent(song);
           render();
           if (!canPlay || song === null) return;
-          if (audio.src !== undefined) audio.src = '/yoimiya-music/audio?name=' + encodeURIComponent(song.audio);
+          const src = '/yoimiya-music/audio?name=' + encodeURIComponent(song.audio);
+
+          // 先探一次取流地址。媒体元素给的错误信息太笼统（只有 code 3/4），
+          // 而一次 Range 请求能直接问出 HTTP 状态，把三种故障精确分开：
+          //   404/405 → 路由没注册（Host 半边改动后需要完全重启 DSH）
+          //   400     → 文件名被服务端拒了（不在白名单 / 含路径分隔符）
+          //   200/206 → 取流正常，问题在解码或自动播放策略
+          try {
+            const probe = await fetch(src, { headers: { Range: 'bytes=0-1' }, cache: 'no-store' });
+            if (probe.ok !== true) {
+              line.textContent = song.title + ' · 取流失败：HTTP ' + probe.status
+                + (probe.status === 404 || probe.status === 405 ? '（曲库接口未注册或音频路由未重启）' : '');
+              return;
+            }
+          } catch (err) {
+            line.textContent = song.title + ' · 取流请求失败：' + (err?.message ?? '未知');
+            return;
+          }
+
+          if (audio.src !== undefined) audio.src = src;
           try {
             await audio.play();
           } catch (err) {
-            // 静默失败是查不下去的：把原因写在曲目行上。常见三种——文件取不到
-            // （路由没注册会 404）、格式不支持、被自动播放策略拦下。
-            line.textContent = song.title + ' · 播放失败：' + (err?.name ?? 'error');
+            line.textContent = song.title + ' · 播放被拒：' + (err?.name ?? 'error')
+              + (err?.name === 'NotAllowedError' ? '（浏览器要求先有一次点击）' : '');
           }
         };
 

@@ -722,23 +722,6 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-btn:hover {
   background: rgba(224, 138, 60, 0.85);
   transition: width .15s linear;
 }
-.dsh-yoimiya-music-addrow { margin-top: 9px; }
-.dsh-yoimiya-music-add {
-  width: 100%;
-  border: 1px dashed rgba(224, 138, 60, 0.40);
-  border-radius: 8px;
-  background: transparent;
-  color: #F0B068;
-  font: inherit;
-  font-size: 11px;
-  padding: 5px 0;
-  cursor: pointer;
-  transition: background .15s ease, border-color .15s ease;
-}
-.dsh-yoimiya-music-add:hover {
-  background: rgba(224, 138, 60, 0.12);
-  border-color: rgba(224, 138, 60, 0.75);
-}
 .dsh-yoimiya-music-add:focus-visible {
   outline: 2px solid rgba(224, 138, 60, 0.60);
   outline-offset: 2px;
@@ -1046,6 +1029,48 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-crop-canvas {
 }
 body:not([data-ds-dark-theme]) .dsh-yoimiya-crop-range { accent-color: #B5502A; }
 body:not([data-ds-dark-theme]) .dsh-yoimiya-crop-hint { color: #7C6A56; }
+
+/* ── 音乐面板：音量行 / 列表折叠 ───────────────────────────────────── */
+.dsh-yoimiya-music-vol {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.dsh-yoimiya-music-volbtn {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #B9AC9C;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+.dsh-yoimiya-music-volbtn:hover { background: rgba(224, 138, 60, 0.12); }
+.dsh-yoimiya-music-volbtn:focus-visible {
+  outline: 2px solid rgba(224, 138, 60, 0.6);
+  outline-offset: 2px;
+}
+.dsh-yoimiya-music-volrange {
+  flex: 1;
+  min-width: 0;
+  accent-color: #E08A3C;
+  cursor: pointer;
+}
+/* 列表默认收起：面板上只留图标，点一下才展开 */
+.dsh-yoimiya-music-list[data-open="false"] { display: none; }
+.dsh-yoimiya-music-listbtn[aria-expanded="true"],
+.dsh-yoimiya-music-addbtn { color: #F0B068; }
+
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-volbtn { color: #6B5A4A; }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-volbtn:hover { background: rgba(181, 80, 42, 0.10); }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-volrange { accent-color: #B5502A; }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-listbtn[aria-expanded="true"],
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-addbtn { color: #B5502A; }
 `;
 
     // ══════════════════════════════════════════════════════════════
@@ -1846,17 +1871,46 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-crop-hint { color: #7C6A56; }
         const bar = document.createElement('div');
         bar.className = 'dsh-yoimiya-music-bar';
 
-        const addRow = document.createElement('div');
-        addRow.className = 'dsh-yoimiya-music-addrow';
+        // 音量行常显。放不出声时第一个要排除的就是"被静音或音量为 0"，
+        // 把它藏在二级菜单里等于给自己添堵。
+        const volRow = document.createElement('div');
+        volRow.className = 'dsh-yoimiya-music-vol';
+        const volBtn = document.createElement('button');
+        volBtn.type = 'button';
+        volBtn.className = 'dsh-yoimiya-music-volbtn';
+        volBtn.textContent = '🔊';
+        volBtn.title = '静音 / 取消静音';
+        volBtn.setAttribute('aria-label', '静音');
+        const vol = document.createElement('input');
+        vol.type = 'range';
+        vol.min = '0';
+        vol.max = '100';
+        vol.value = '100';
+        vol.className = 'dsh-yoimiya-music-volrange';
+        vol.setAttribute('aria-label', '音量');
+        volRow.append(volBtn, vol);
+
+        // 曲目列表收进一个图标：面板默认只有播放控件，点它才展开列表
+        const listBtn = document.createElement('button');
+        listBtn.type = 'button';
+        listBtn.className = 'dsh-yoimiya-music-btn dsh-yoimiya-music-listbtn';
+        listBtn.textContent = '☰';
+        listBtn.title = '曲目列表';
+        listBtn.setAttribute('aria-label', '曲目列表');
+        listBtn.setAttribute('aria-expanded', 'false');
+        bar.append(listBtn);
+
         const addBtn = document.createElement('button');
         addBtn.type = 'button';
-        addBtn.className = 'dsh-yoimiya-music-add';
-        addBtn.textContent = '添加歌曲';
-        addBtn.title = '打开添加弹窗：歌曲必须，封面非必须';
-        addRow.append(addBtn);
+        addBtn.className = 'dsh-yoimiya-music-btn dsh-yoimiya-music-addbtn';
+        addBtn.textContent = '＋';
+        addBtn.title = '添加歌曲（歌曲必须，封面非必须）';
+        addBtn.setAttribute('aria-label', '添加歌曲');
+        bar.append(addBtn);
 
         const listEl = document.createElement('div');
         listEl.className = 'dsh-yoimiya-music-list';
+        listEl.dataset.open = 'false';
         listEl.textContent = '读取中…';
 
         let songs = [];
@@ -1876,11 +1930,13 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-crop-hint { color: #7C6A56; }
           setCurrent(song);
           render();
           if (!canPlay || song === null) return;
-          if (audio.src !== undefined) audio.src = '/yoimiya-music/file/' + encodeURIComponent(song.audio);
+          if (audio.src !== undefined) audio.src = '/yoimiya-music/audio?name=' + encodeURIComponent(song.audio);
           try {
             await audio.play();
-          } catch {
-            // 自动播放策略或格式不支持：保持选中状态，让用户再点一次
+          } catch (err) {
+            // 静默失败是查不下去的：把原因写在曲目行上。常见三种——文件取不到
+            // （路由没注册会 404）、格式不支持、被自动播放策略拦下。
+            line.textContent = song.title + ' · 播放失败：' + (err?.name ?? 'error');
           }
         };
 
@@ -1952,7 +2008,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-crop-hint { color: #7C6A56; }
             const thumb = document.createElement('span');
             thumb.className = 'dsh-yoimiya-music-thumb';
             if (typeof s.image === 'string' && s.image.length > 0 && thumb.style !== undefined) {
-              thumb.style.backgroundImage = 'url("/yoimiya-music/file/' + encodeURIComponent(s.image) + '")';
+              thumb.style.backgroundImage = 'url("/yoimiya-music/audio?name=' + encodeURIComponent(s.image) + '")';
             }
 
             const title = document.createElement('button');
@@ -2062,6 +2118,10 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-crop-hint { color: #7C6A56; }
         addBtn.addEventListener('click', () => dialog.open());
         if (canPlay) {
           audio.addEventListener('ended', () => step(1));
+          // 载入失败（多半是音频路由没注册或文件被删）也要说出来
+          audio.addEventListener('error', () => {
+            if (currentId !== null) line.textContent = '音频载入失败（文件取不到或格式不支持）';
+          });
           audio.addEventListener('timeupdate', () => {
             const d = audio.duration;
             if (Number.isFinite(d) && d > 0) {
@@ -2078,7 +2138,35 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-crop-hint { color: #7C6A56; }
           audio.currentTime = ((e.clientX - rect.left) / rect.width) * audio.duration;
         });
 
-        wrap.append(line, prog, bar, addRow, listEl);
+        let listOpen = false;
+        listBtn.addEventListener('click', () => {
+          listOpen = !listOpen;
+          listEl.dataset.open = String(listOpen);
+          listBtn.setAttribute('aria-expanded', String(listOpen));
+        });
+
+        let lastVol = 1;
+        vol.addEventListener('input', () => {
+          const v = Number(vol.value) / 100;
+          if (v > 0) lastVol = v;
+          if (canPlay) audio.volume = v;
+          volBtn.textContent = v === 0 ? '🔇' : (v < 0.5 ? '🔉' : '🔊');
+        });
+        volBtn.addEventListener('click', () => {
+          if (!canPlay) return;
+          if (audio.volume > 0) {
+            lastVol = audio.volume;
+            audio.volume = 0;
+            vol.value = '0';
+            volBtn.textContent = '🔇';
+          } else {
+            audio.volume = lastVol;
+            vol.value = String(Math.round(lastVol * 100));
+            volBtn.textContent = '🔊';
+          }
+        });
+
+        wrap.append(line, prog, bar, volRow, listEl);
 
         return {
           node: wrap,

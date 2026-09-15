@@ -265,8 +265,11 @@ function handleMusic(req, res, url) {
     );
   }
 
-  if (action.startsWith('file/')) {
-    return serveMusicFile(req, res, decodeURIComponent(action.slice('file/'.length)));
+  // 音频也走 exact：文件名放查询串而不是路径段。
+  // 起因是 prefix 路由只有从 DSH 源码读出来的依据、没有实证，实测 405——
+  // 一旦它不可用，音频流就整个放不出来。exact 是已经在用的、有实证的方式。
+  if (action === 'audio') {
+    return serveMusicFile(req, res, url.searchParams.get('name'));
   }
 
   return sendJson(res, { ok: false, reason: 'unknown-action' }, 404);
@@ -324,7 +327,7 @@ export default {
       return handleMusic(req, res, url);
     };
 
-    for (const action of ['list', 'upload', 'delete']) {
+    for (const action of ['list', 'upload', 'delete', 'audio']) {
       const path = `${MUSIC_ROOT}/${action}`;
       try {
         const disposeAction = ctx.webServer.register({ kind: 'exact', path, handler: musicHandler });
@@ -335,17 +338,6 @@ export default {
       }
     }
 
-    try {
-      const disposeFiles = ctx.webServer.register({
-        kind: 'prefix',
-        path: `${MUSIC_ROOT}/file`,
-        handler: musicHandler,
-      });
-      ctx.effect(() => disposeFiles);
-      registered += 1;
-    } catch (e) {
-      console.warn(`[yoimiya-theme] 路由 ${MUSIC_ROOT}/file 已被其他实例占用，跳过:`, e?.message ?? e);
-    }
 
     // 初始化在注册之后做，且不 await：目录建不出来也不该拖住插件加载
     void initMusicDir().then((ready) => {

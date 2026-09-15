@@ -30,8 +30,6 @@
 
 设置 → 插件 → 搜索 `yoimiya` → 安装。
 
-> 收录申请尚在审核，合并前请用下面两种方式之一。
-
 ### 命令行
 
 ```bash
@@ -74,8 +72,7 @@ dsh plugin --profile web remove dsh-yoimiya-theme
   remove dsh-yoimiya-theme
 ```
 
-主题用的是叠加层（`overrideTokens`）而不是主题注册，所以卸载后配色与样式一并
-撤销，不留残留。
+卸载后配色与样式会一并撤销，不留残留。
 
 ## 兼容性
 
@@ -91,12 +88,4 @@ MIT，见 [`LICENSE`](./LICENSE)。
 
 ## 开发
 
-配色推导、遮罩设计、选择器策略，以及改配色 / 换图的操作步骤，见
-[`DESIGN.md`](./DESIGN.md)。
-
-`tools/verify.mjs` 是自检脚本，把设计里的硬性指标变成断言（对比度、token 形状、
-图层顺序等），不装 DSH 也能跑：
-
-```bash
-node tools/verify.mjs
-```
+设计推导、改配色与换图的操作步骤见 [`DESIGN.md`](./DESIGN.md)。

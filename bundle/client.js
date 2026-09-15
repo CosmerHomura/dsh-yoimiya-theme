@@ -1071,6 +1071,44 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-volbtn:hover { background: rgb
 body:not([data-ds-dark-theme]) .dsh-yoimiya-music-volrange { accent-color: #B5502A; }
 body:not([data-ds-dark-theme]) .dsh-yoimiya-music-listbtn[aria-expanded="true"],
 body:not([data-ds-dark-theme]) .dsh-yoimiya-music-addbtn { color: #B5502A; }
+
+/* 播放器本体不进布局，只作为播放通道 */
+.dsh-yoimiya-music-audio { display: none; }
+
+/* 缩略图是按钮：加 / 换封面 */
+.dsh-yoimiya-music-thumb {
+  padding: 0;
+  border: 0;
+  position: relative;
+  cursor: pointer;
+}
+.dsh-yoimiya-music-thumb[data-empty="true"] {
+  border: 1px dashed rgba(224, 138, 60, 0.45);
+}
+.dsh-yoimiya-music-thumb[data-empty="true"]::after {
+  content: '＋';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(224, 138, 60, 0.75);
+  font-size: 12px;
+  line-height: 1;
+}
+.dsh-yoimiya-music-thumb:hover { box-shadow: 0 0 0 1px rgba(224, 138, 60, 0.75); }
+.dsh-yoimiya-music-thumb:focus-visible {
+  outline: 2px solid rgba(224, 138, 60, 0.6);
+  outline-offset: 2px;
+}
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-thumb[data-empty="true"] {
+  border-color: rgba(181, 80, 42, 0.40);
+}
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-thumb[data-empty="true"]::after {
+  color: rgba(181, 80, 42, 0.7);
+}
+body:not([data-ds-dark-theme]) .dsh-yoimiya-music-thumb:hover {
+  box-shadow: 0 0 0 1px rgba(181, 80, 42, 0.7);
+}
 `;
 
     // ══════════════════════════════════════════════════════════════
@@ -1988,6 +2026,40 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-addbtn { color: #B5502A; }
           }
         };
 
+        // 封面选择器（列表行共用）：一次只服务一首歌，选完即清
+        const coverPicker = document.createElement('input');
+        coverPicker.type = 'file';
+        coverPicker.accept = 'image/*';
+        coverPicker.className = 'dsh-yoimiya-music-picker';
+        let coverFor = null;
+
+        const uploadCover = async (song, file) => {
+          const cropped = await crop.open(file);
+          if (cropped === null) return;   // 用户取消了裁切
+          const stem = String(song.audio).replace(/\.[^.]+$/, '');
+          const sent = await upload(cropped, stem + '.webp');
+          if (sent.ok !== true) {
+            line.textContent = song.title + ' · 封面失败：' + sent.detail;
+            return;
+          }
+          await refresh();
+        };
+
+        coverPicker.addEventListener('change', () => {
+          const files = coverPicker.files;
+          coverPicker.value = '';
+          if (files === undefined || files === null || files.length === 0) return;
+          if (coverFor === null) return;
+          const song = coverFor;
+          coverFor = null;
+          void uploadCover(song, files[0]);
+        });
+
+        const pickCover = (song) => {
+          coverFor = song;
+          if (typeof coverPicker.click === 'function') coverPicker.click();
+        };
+
         const render = () => {
           listEl.textContent = '';
           if (songs.length === 0) {
@@ -2005,11 +2077,20 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-addbtn { color: #B5502A; }
             row.className = 'dsh-yoimiya-music-row';
             if (s.id === currentId) row.dataset.current = 'true';
 
-            const thumb = document.createElement('span');
+            // 缩略图本身就是「加 / 换封面」按钮：已有封面的点它替换，
+            // 没有封面的点它添加。走的是同一套裁切流程与同一个上传名，
+            // 所以同名封面会被覆盖，不需要"先删再传"。
+            const thumb = document.createElement('button');
+            thumb.type = 'button';
             thumb.className = 'dsh-yoimiya-music-thumb';
+            thumb.title = typeof s.image === 'string' ? '替换封面' : '添加封面';
+            thumb.setAttribute('aria-label', (typeof s.image === 'string' ? '替换 ' : '添加 ') + s.title + ' 的封面');
             if (typeof s.image === 'string' && s.image.length > 0 && thumb.style !== undefined) {
               thumb.style.backgroundImage = 'url("/yoimiya-music/audio?name=' + encodeURIComponent(s.image) + '")';
+            } else {
+              thumb.dataset.empty = 'true';
             }
+            thumb.addEventListener('click', () => { void pickCover(s); });
 
             const title = document.createElement('button');
             title.type = 'button';
@@ -2118,9 +2199,20 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-addbtn { color: #B5502A; }
         addBtn.addEventListener('click', () => dialog.open());
         if (canPlay) {
           audio.addEventListener('ended', () => step(1));
-          // 载入失败（多半是音频路由没注册或文件被删）也要说出来
+          // 载入失败必须报出错误码：MediaError.code 直接区分「取不到文件」
+          // （4，多半是路由没注册或文件名不对）与「格式不支持」（3），
+          // 光说一句"载入失败"两者分不开。
           audio.addEventListener('error', () => {
-            if (currentId !== null) line.textContent = '音频载入失败（文件取不到或格式不支持）';
+            const err = audio.error;
+            const detail = err === null || err === undefined
+              ? '未知'
+              : (err.message || ('code ' + err.code + (err.code === 4 ? '（取不到文件或格式不支持）' : '')));
+            line.textContent = '音频载入失败：' + detail;
+          });
+          // 元数据到手说明取流成功，这时才敢说"就绪"
+          audio.addEventListener('loadedmetadata', () => {
+            const at = indexOfCurrent();
+            if (at >= 0) line.textContent = songs[at].title + ' · 就绪 ' + Math.round(audio.duration) + 's';
           });
           audio.addEventListener('timeupdate', () => {
             const d = audio.duration;
@@ -2166,7 +2258,10 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-addbtn { color: #B5502A; }
           }
         });
 
-        wrap.append(line, prog, bar, volRow, listEl);
+        // 播放器本体也挂进 DOM：脱离文档的 <audio> 多数情况下能放，
+        // 但挂进去能排掉一整类"能播却不发声"的疑难杂症，代价为零。
+        audio.className = 'dsh-yoimiya-music-audio';
+        wrap.append(line, prog, bar, volRow, listEl, coverPicker, audio);
 
         return {
           node: wrap,

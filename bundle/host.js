@@ -247,6 +247,19 @@ function handleMusic(req, res, url) {
       async (body) => {
         if (body.length === 0) return sendJson(res, { ok: false, reason: 'empty' }, 400);
         await mkdir(MUSIC_DIR, { recursive: true });
+        // 上传的是封面且已存在同名歌曲时，先清掉同名的其它图片扩展名：
+        // 否则 song.jpg 与 song.webp 会同时存在，配对取哪个就成了偶然，
+        // 表现为「换了封面但显示的还是旧的那张」。
+        if (IMAGE_EXT.has(extname(name).toLowerCase())) {
+          const stem = stemOf(name);
+          const siblings = await readdir(MUSIC_DIR);
+          for (const f of siblings) {
+            if (f === name) continue;
+            if (IMAGE_EXT.has(extname(f).toLowerCase()) && stemOf(f) === stem) {
+              await rm(join(MUSIC_DIR, f), { force: true });
+            }
+          }
+        }
         await writeFile(join(MUSIC_DIR, name), body);
         return sendJson(res, { ok: true, name });
       },

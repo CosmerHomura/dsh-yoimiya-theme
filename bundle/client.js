@@ -38,6 +38,13 @@ window.__ModuleLoader__.load({
     /** 资源路由前缀（与 bundle/host.js 的注册路径一致）。 */
     const BG = '/yoimiya-bg';
 
+    // 资源版本号。【改过 assets/ 里的任何文件就要把它 +1】。
+    // 主题资源由 Host 以 max-age=3600 提供，URL 不变就一直是旧的——改了标识
+    // 却看不到新图，很容易误判成"没生效"。加一个查询串即可换 URL，从而绕过
+    // 缓存；路由只按 pathname 匹配，查询串不影响命中。
+    const ASSET_V = 'v2';
+    const asset = (file) => `${BG}/${file}?v=${ASSET_V}`;
+
     /** 背景层透明度缩放。 */
     const SCALE = INTENSITY === 'calm' ? 0.5 : INTENSITY === 'plain' ? 0.06 : 1;
 
@@ -258,14 +265,14 @@ const WALL_BRIGHT = INTENSITY === 'calm' ? 1.06 : 1.14;
       `radial-gradient(ellipse at 50% 0%, rgba(120,90,160,${a(0.12)}) 0%, rgba(120,90,160,0) 55%)`,
       `linear-gradient(0deg, rgba(78,104,148,${a(0.14)}) 0%, rgba(78,104,148,0) 32%)`,
     ];
-    if (SCENE) darkBg.push(`url('${BG}/bg-night.svg')`);
+    if (SCENE) darkBg.push(`url('${asset('bg-night.svg')}')`);
     darkBg.push('linear-gradient(165deg, #191428 0%, #14111C 45%, #1C1520 100%)');
 
     const lightBg = [
       `radial-gradient(circle at 92% 18%, rgba(232,160,74,${a(0.12)}) 0%, rgba(232,160,74,0) 24%)`,
       `radial-gradient(circle at 8% 84%, rgba(196,96,74,${a(0.10)}) 0%, rgba(196,96,74,0) 22%)`,
     ];
-    if (SCENE) lightBg.push(`url('${BG}/bg-day.svg')`);
+    if (SCENE) lightBg.push(`url('${asset('bg-day.svg')}')`);
     lightBg.push('linear-gradient(165deg, #F8F1E4 0%, #F3EADA 50%, #EFE4D2 100%)');
     const layerList = (arr) => arr.join(',\n    ');
 
@@ -320,7 +327,7 @@ body::before {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background-image: url('${BG}/yoimiya-wide.jpg');
+  background-image: url('${asset('yoimiya-wide.jpg')}');
   background-repeat: no-repeat;
   background-size: cover;
   background-position: left 38%;
@@ -450,14 +457,14 @@ body:not([data-ds-dark-theme]) [data-chat-flow] { text-shadow: 0 1px 2px rgba(25
   flex: none;
   width: 24px;
   height: 24px;
-  background-image: url('${BG}/mark.svg');
+  background-image: url('${asset('mark.svg')}');
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center center;
 }
 body:not([data-ds-dark-theme]) [data-dsh-sidebar-brand-identity] [class*="_brandMark"]::before,
 body:not([data-ds-dark-theme]) [class*="_railMark"]::before {
-  background-image: url('${BG}/mark-day.svg');
+  background-image: url('${asset('mark-day.svg')}');
 }
 
 /* ── 6 · 会话激活项：橙色「引线」竖条 ─────────────────────────────

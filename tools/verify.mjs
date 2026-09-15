@@ -382,7 +382,12 @@ const routes = new Set(
   [...hostSrc.matchAll(/path:\s*'([^']+)'/g)].map((m) => m[1]),
 );
 const referenced = new Set(
-  [...css.matchAll(/url\('([^']+)'\)/g)].map((m) => m[1]).map((u) => u.replace(/^\$\{BG\}/, '/yoimiya-bg')),
+  [...css.matchAll(/url\('([^']+)'\)/g)]
+    .map((m) => m[1])
+    .map((u) => u.replace(/^\$\{BG\}/, '/yoimiya-bg'))
+    // 剥掉查询串再比对：资源 URL 会带 ?v=<ASSET_V> 做缓存失效，
+    // 而 Host 路由只按 pathname 匹配，带查询串并不影响命中。
+    .map((u) => u.split('?')[0]),
 );
 console.log(`Host 注册路由：${[...routes].join(', ')}`);
 console.log(`浏览器半边引用：${[...referenced].join(', ')}`);

@@ -256,6 +256,28 @@ scanPure(capturedCss ?? '', '样式表');
 
 // ── 5 · 样式表结构 ─────────────────────────────────────────────
 const css = capturedCss ?? '';
+
+// ── 3b · 样式表里硬编码的颜色也要达标 ───────────────────────────
+// token 表之外，样式表里还有几处硬编码颜色。早先只检查 token 表，漏掉了占位色，
+// 结果亮档实测只有 4.03:1 —— 修 token 时改了 label-tertiary，却忘了这一处。
+// 卡片底面取近似值：暗档是 rgba(28,22,34,.78) 叠在暗遮罩上，亮档是
+// rgba(255,252,246,.94) 叠在纸底上。
+const DARK_CARD = '#282231';
+const LIGHT_CARD = '#FCF8F0';
+const HARDCODED_COLORS = [
+  ['占位文案 · 暗档', /\[data-composer-placeholder\]\s*\{\s*color:\s*(#[0-9A-Fa-f]{6})/, DARK_CARD],
+  ['占位文案 · 亮档', /body:not\(\[data-ds-dark-theme\]\)\s*\[data-composer-placeholder\]\s*\{\s*color:\s*(#[0-9A-Fa-f]{6})/, LIGHT_CARD],
+];
+console.log('');
+console.log('样式表硬编码颜色');
+console.log('─'.repeat(58));
+for (const [label, re, card] of HARDCODED_COLORS) {
+  const m = re.exec(css);
+  if (m === null) { fail(`样式表里找不到「${label}」的颜色（选择器被改过了？）`); continue; }
+  const r = ratio(m[1], card);
+  if (r < 4.5) fail(`${label} ${m[1]} 对卡片 ${card} 仅 ${r.toFixed(2)}:1，低于 4.5:1`);
+  console.log(`${r >= 4.5 ? '✓' : '✗'} ${label.padEnd(16)} ${m[1]} on ${card}  ${r.toFixed(2)}:1`);
+}
 if (!css) fail('未捕获到生成的样式表');
 const open = (css.match(/\{/g) ?? []).length;
 const close = (css.match(/\}/g) ?? []).length;
@@ -265,10 +287,6 @@ const REQUIRED_SELECTORS = [
   ['暗档 body 天空', 'body[data-ds-dark-theme]'],
   ['亮档 body 天空', 'body:not([data-ds-dark-theme])'],
   ['立绘层', 'body::before'],
-  ['阅读遮罩层', 'body::after'],
-  ['hero 阶段', '[data-phase="hero"]'],
-  ['active 阶段', '[data-phase="active"]'],
-  ['settling 阶段', '[data-phase="settling"]'],
   ['会话流阅读卡', '[data-chat-flow]'],
   ['输入卡', '[data-composer-card]'],
   ['占位文案', '[data-composer-placeholder]'],
@@ -282,14 +300,21 @@ const REQUIRED_SELECTORS = [
 for (const [label, sel] of REQUIRED_SELECTORS) {
   if (!css.includes(sel)) fail(`样式表缺少必需选择器（${label}）：${sel}`);
 }
-if (/IrIWsq_|DZ80Kq_|_1tdjgG_|Md3f7G_|uV2eYG_|_8JRpoa_/.test(css)) {
+// 先剥掉 CSS 注释再扫：注释里为了说明问题会写出哈希类名，
+// 但规则针对的是【选择器】——注释不参与渲染，不该判失败。
+// 注释配平：未闭合的 /* 会把它之后的所有规则一起吞掉，而花括号计数仍然"平衡"，
+// 现有检查全部察觉不到。本主题的注释里会写上选择器片段，容易踩这个坑。
+{
+  const opens = (css.match(/\/\*/g) ?? []).length;
+  const closes = (css.match(/\*\//g) ?? []).length;
+  if (opens !== closes) fail(`样式表注释未配平：/* ×${opens}，*/ ×${closes}`);
+}const cssNoComments = css.replace(/\/\*[\s\S]*?\*\//g, '');
+if (/IrIWsq_|DZ80Kq_|_1tdjgG_|Md3f7G_|uV2eYG_|_8JRpoa_/.test(cssNoComments)) {
   fail('样式表硬编码了构建哈希类名——DSH 升级后会失效');
 }
 // 图层顺序：遮罩必须晚于立绘出现在样式表里，否则遮罩会被立绘盖住
-const iBefore = css.indexOf('body::before');
-const iAfter = css.indexOf('body::after');
-if (iBefore < 0 || iAfter < 0) fail('未找到立绘层或遮罩层');
-else if (iAfter < iBefore) fail('body::after 出现在 body::before 之前——遮罩会被立绘盖住');
+// 本主题刻意不设阅读遮罩：壁纸直接呈现在 body 背景上，可读性由会话卡
+// 自身的半透明底面与毛玻璃提供。曾用中心遮罩压平背景，会把画面压闷，已废弃。
 
 // 全屏级 backdrop-filter：只数不带 -webkit- 前缀的声明，避免重复计数
 const blurLayers = (css.match(/(?<!-webkit-)backdrop-filter:\s*blur/g) ?? []).length;

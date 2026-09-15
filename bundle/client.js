@@ -47,6 +47,14 @@ window.__ModuleLoader__.load({
     /** 透明度书写助手：按 SCALE 缩放并裁剪浮点噪声。 */
     const a = (v) => String(Math.round(v * SCALE * 1000) / 1000);
 
+// 背景强度档位作用在【壁纸】上。壁纸是背景的主体，而环境光渐变被它完全盖住，
+// 缩放那些渐变等于什么都没做——曾经就是这样，三档在视觉上完全相同。
+//   standard  全幅全亮（brightness 1.14，把夜景提成"明亮的夜"）
+//   calm      略微退后一档，长时间阅读更安静
+//   plain     壁纸不透明度归零，只留程序化天空
+const WALL_OPACITY = INTENSITY === 'plain' ? 0 : INTENSITY === 'calm' ? 0.86 : 1;
+const WALL_BRIGHT = INTENSITY === 'calm' ? 1.06 : 1.14;
+
     // ── 占位文案：宵宫台词 ────────────────────────────────────────
     // 用「前缀匹配 + 保留尾串」而不是整串替换，这样「… / 调用指令 @ 文件或对话」
     // 这类功能提示会原样保留，语言与文案微调都不会让它失效。
@@ -79,9 +87,15 @@ window.__ModuleLoader__.load({
 
     const TOKENS = {
       // ── 底色 ──────────────────────────────────────────────────
+      // bg-base 必须【完全透明】：DSH 会在三个嵌套容器上各画一次它
+      //   ._1tdjgG_frame / ._8JRpoa_root / .jhU3aG_root
+      // 哪怕单层只有 0.10，三层叠加也有 27%，会把壁纸压平、让
+      // backdrop-filter 失去可模糊的结构（毛玻璃因此看不出来）。
+      // 设为 0 之后这三层等于不存在，body 上的壁纸与遮罩直接透上来——
+      // 所以不需要去改 DSH 本体，那样做还无法随主题分发。
       // 必须接近全透明：ui-layout 的 .frame 消费该 token 且铺满全屏，
       // 不透明会把 body 上的背景场景整个盖住。
-      '--dsw-alias-bg-base': p('rgba(250,243,232,0.12)', 'rgba(14,12,20,0.10)'),
+      '--dsw-alias-bg-base': p('rgba(250,243,232,0)', 'rgba(14,12,20,0)'),
       '--dsw-alias-bg-layer-1': p('rgba(255,251,243,0.86)', 'rgba(26,22,34,0.72)'),
       '--dsw-alias-bg-layer-2': p('rgba(245,235,218,0.88)', 'rgba(34,28,43,0.78)'),
       '--dsw-alias-bg-layer-3': p('rgba(240,228,208,0.90)', 'rgba(40,33,50,0.82)'),
@@ -183,7 +197,7 @@ window.__ModuleLoader__.load({
       '--dsw-alias-tooltip-bg': p('rgba(51,38,28,0.94)', 'rgba(237,227,211,0.94)'),
 
       // ── 组件专属 ──────────────────────────────────────────────
-      '--dsw-specific-sidebar-fill': p('rgba(250,243,232,0.62)', 'rgba(18,15,24,0.55)'),
+      '--dsw-specific-sidebar-fill': p('rgba(250,243,232,0.52)', 'rgba(18,15,24,0.45)'),
       '--dsw-specific-sidebar-nav-item-hover': p('rgba(120,80,40,0.08)', 'rgba(240,200,140,0.08)'),
       '--dsw-specific-sidebar-nav-item-active': p('rgba(181,80,42,0.14)', 'rgba(224,138,60,0.15)'),
       '--dsw-specific-sidebar-nav-item-active-accent': p('rgba(181,80,42,0.85)', 'rgba(224,138,60,0.85)'),
@@ -224,15 +238,19 @@ window.__ModuleLoader__.load({
     //  样式表
     // ══════════════════════════════════════════════════════════════
     //
-    // 背景分四层，从后到前：
-    //   body              程序化天空（多层渐变 + 烟花场景 SVG）
-    //   body::before      宵宫立绘，按对话阶段自动退让
-    //   body::after       阅读遮罩，压住立绘与天空的亮度方差
+    // 背景分三层，从后到前：
+    //   body              程序化天空（多层渐变 + 烟花场景 SVG），壁纸缺失时的兜底
+    //   body::before      宵宫立绘
     //   [data-chat-flow]  会话阅读卡（正文最后一道稳定底）
     //
-    // 遮罩为什么必须单独占一层：background-image 只作用于 body 自己的盒子，
-    // 盖不住 body::before 画出来的立绘。只有把它放到伪元素上，才能既让立绘
-    // 存在、又让正文背后保持低方差。
+    // 【刻意不设阅读遮罩】。正文背后需要的低方差，由会话卡自己的半透明底面
+    // 加毛玻璃提供，不需要在整张画面上再盖一层。此前用过一整层 body::after
+    // 中心遮罩去压平背景，实测代价是把画面压闷——壁纸与人物都看不清，等于
+    // 拿主题本身去换可读性，已整体删除。
+    //
+    // 已知风险：首页 hero 的标题直接压在立绘上，没有遮罩兜底；壁纸里那几道
+    // 高亮光柱（峰值亮度 255）可能让标题对比度不足。这是"不要遮罩"的直接
+    // 后果，若实际不可读，应只给 hero 补一条窄遮罩，不要恢复全屏遮罩。
 
     const darkBg = [
       `radial-gradient(circle at 92% 78%, rgba(224,138,60,${a(0.12)}) 0%, rgba(224,138,60,0) 22%)`,
@@ -249,33 +267,6 @@ window.__ModuleLoader__.load({
     ];
     if (SCENE) lightBg.push(`url('${BG}/bg-day.svg')`);
     lightBg.push('linear-gradient(165deg, #FDF8F0 0%, #FAF3E8 50%, #F7EFE1 100%)');
-
-    // 阅读遮罩两套：hero 用横向渐变给标题让位；active 用中心椭圆压住正文背后。
-    //
-    // 方向与强度都由实测决定（不是估的）：
-    //   · 人物占 x 0–50%、脸在 25–33%、落区平均亮度 113.9
-    //   · DSH 标题居中，落区约在视口宽 41–73%；该区均值亮度 45–61，
-    //     但含 255 的细光柱亮点——遮罩后最亮像素若仍 >85，
-    //     正文 #EDE3D3 就会跌破 4.5:1（实测 0.74 档时只有 3.33:1）
-    //   故 41% 处必须已压到 ≥0.70，52% 后收在 0.87 以上。
-    //   左侧 ≤0.12 是为了不压暗人物。
-    const darkScrimHero = [
-      `linear-gradient(96deg, rgba(12,10,18,${a(0.06)}) 0%, rgba(12,10,18,${a(0.12)}) 24%, rgba(12,10,18,${a(0.46)}) 34%, rgba(12,10,18,${a(0.75)}) 40%, rgba(12,10,18,${a(0.87)}) 52%, rgba(12,10,18,${a(0.89)}) 100%)`,
-      `linear-gradient(0deg, rgba(12,10,18,${a(0.40)}) 0%, rgba(12,10,18,${a(0.08)}) 24%, rgba(12,10,18,0) 40%)`,
-    ];
-    const darkScrimActive = [
-      `radial-gradient(ellipse 72% 60% at 50% 46%, rgba(12,10,18,${a(0.90)}) 0%, rgba(12,10,18,${a(0.62)}) 55%, rgba(12,10,18,0) 100%)`,
-      `linear-gradient(180deg, rgba(12,10,18,${a(0.42)}) 0%, rgba(12,10,18,${a(0.52)}) 100%)`,
-    ];
-    const lightScrimHero = [
-      `linear-gradient(96deg, rgba(255,252,246,${a(0.22)}) 0%, rgba(255,252,246,${a(0.30)}) 24%, rgba(255,252,246,${a(0.60)}) 34%, rgba(255,252,246,${a(0.85)}) 40%, rgba(255,252,246,${a(0.92)}) 52%, rgba(255,252,246,${a(0.94)}) 100%)`,
-      `linear-gradient(0deg, rgba(250,243,232,${a(0.46)}) 0%, rgba(250,243,232,${a(0.08)}) 24%, rgba(250,243,232,0) 40%)`,
-    ];
-    const lightScrimActive = [
-      `radial-gradient(ellipse 74% 62% at 50% 46%, rgba(255,252,246,${a(0.95)}) 0%, rgba(255,252,246,${a(0.60)}) 58%, rgba(255,252,246,0) 100%)`,
-      `linear-gradient(180deg, rgba(255,252,246,${a(0.40)}) 0%, rgba(252,246,236,${a(0.50)}) 100%)`,
-    ];
-
     const layerList = (arr) => arr.join(',\n    ');
 
     const css = `
@@ -333,88 +324,47 @@ body::before {
   background-repeat: no-repeat;
   background-size: cover;
   background-position: left 38%;
-  opacity: 1;
-  transition: opacity .5s cubic-bezier(.4, 0, .2, 1);
+  opacity: ${WALL_OPACITY};
+  /* 夜景原图本身偏暗，整片提亮一档：让它是明亮的夜，而不是压黑的黑。
+     这一行曾经没能插进样式表——插入时用了半角双引号，被 PowerShell 当成
+     字符串结束符截断，结果注释未闭合、filter 整行丢失，而且当时所有检查
+     都没察觉（花括号计数仍然平衡）。校验器现已加入注释配平检查。 */
+  filter: brightness(${WALL_BRIGHT}) saturate(1.06);
 }
 
 /* 亮档：立绘是dusk 色调，加一层和纸洗色，让它像印在纸上而不是贴在屏幕上 */
 body:not([data-ds-dark-theme])::before {
-  opacity: .52;
-  filter: sepia(.22) saturate(.84) brightness(1.07) contrast(.96);
+  opacity: ${WALL_OPACITY * 0.85};
+  filter: sepia(.10) saturate(.94) brightness(1.18) contrast(.94);
 }
 
-/* 进入对话后退让（settling 与 active 同处理，避免首条消息时回弹）。
-   只降不透明度、不再做 transform：宽幅图 cover 铺满，缩放会在边缘
-   露出下层程序化天空，看着像 bug。 */
-body[data-ds-dark-theme]:has([data-phase="active"])::before,
-body[data-ds-dark-theme]:has([data-phase="settling"])::before {
-  opacity: .34;
-}
-body:not([data-ds-dark-theme]):has([data-phase="active"])::before,
-body:not([data-ds-dark-theme]):has([data-phase="settling"])::before {
-  opacity: .28;
-}
-
-/* ── 3 · 阅读遮罩（body::after）───────────────────────────────────
-   护眼的第一性手法：让正文背后的亮度方差趋近于 0。
-   默认（active 及非会话页）走中心椭圆；hero 换成横向渐变，
-   好让标题与立绘各占一边、互不打扰。 */
-body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background-size: cover;
-  background-position: center center;
-  background-repeat: no-repeat;
-}
-body[data-ds-dark-theme]::after {
-  background-image: ${layerList(darkScrimActive)};
-}
-body:not([data-ds-dark-theme])::after {
-  background-image: ${layerList(lightScrimActive)};
-}
-body[data-ds-dark-theme]:has([data-phase="hero"])::after {
-  background-image: ${layerList(darkScrimHero)};
-}
-body:not([data-ds-dark-theme]):has([data-phase="hero"])::after {
-  background-image: ${layerList(lightScrimHero)};
-}
-
-/* 字体渲染：暗底浅字开启抗锯齿，但不动字号/行高/字体族——
-   换字体与缩放破坏排版节奏，反而更伤眼。 */
-body {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
 
 /* ── 2 · 会话流：抬到稳定亮度的阅读卡上 ──────────────────────────
    [data-chat-flow] 是 ChatView 的消息列容器（整段对话，非单条）。
    只叠一层 backdrop-filter，不做多层，避免视觉噪声与合成开销。 */
 [data-chat-flow] {
-  background: rgba(20,17,28,0.60);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(20,17,28,0.30);
+  backdrop-filter: blur(10px) saturate(1.15);
+  -webkit-backdrop-filter: blur(10px) saturate(1.15);
   border: 1px solid rgba(240,200,140,0.10);
   border-radius: 18px;
   padding: 14px 16px 22px;
 }
 body:not([data-ds-dark-theme]) [data-chat-flow] {
-  background: rgba(255,252,246,0.74);
+  background: rgba(255,252,246,0.58);
   border-color: rgba(120,80,40,0.12);
 }
 
 /* ── 3 · 输入卡 ──────────────────────────────────────────────────── */
 [data-composer-card] {
-  background: rgba(28,22,34,0.78) !important;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: rgba(28,22,34,0.72) !important;
+  backdrop-filter: blur(16px) saturate(1.15);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
   border: 1px solid rgba(240,200,140,0.20) !important;
   border-radius: 18px !important;
 }
 body:not([data-ds-dark-theme]) [data-composer-card] {
-  background: rgba(255,252,246,0.90) !important;
+  background: rgba(255,252,246,0.88) !important;
   border-color: rgba(120,80,40,0.22) !important;
 }
 
@@ -426,12 +376,24 @@ body:not([data-ds-dark-theme]) [data-composer-card] {
   outline-offset: 2px !important;
 }
 
-/* 占位文案配色：暗档 4.5:1 下限，再低就不该用了。 */
-[data-composer-placeholder] { color: rgba(138,127,114,0.95) !important; }
-body:not([data-ds-dark-theme]) [data-composer-placeholder] { color: rgba(138,117,99,0.92) !important; }
+/* 占位文案配色：硬编码值，verify.mjs 会按卡片底面核算，须 >=4.5:1。 */
+[data-composer-placeholder] { color: #9C9184 !important; }
+body:not([data-ds-dark-theme]) [data-composer-placeholder] { color: #7C6A56 !important; }
+/* 会话卡底面降到 0.30 之后，正文可能压在壁纸的高亮光柱上。给卡片内的文字
+   加一层极轻的投影，让它在亮底上依然清晰——这样才敢把卡片继续做透。
+   投影只针对 [data-chat-flow] 内部，不影响 UI 其余部分。 */
+[data-chat-flow] { text-shadow: 0 1px 3px rgba(6, 4, 12, 0.6); }
+body:not([data-ds-dark-theme]) [data-chat-flow] { text-shadow: 0 1px 2px rgba(255, 252, 246, 0.72); }
 
 /* ── 4 · 侧边栏：比会话区更透，露出背景 ──────────────────────────── */
-[data-dsh-sidebar-root] { background: transparent !important; }
+[data-dsh-sidebar-root] {
+  background: transparent !important;
+  /* 侧边栏底色被 ._1tdjgG_sidebarCol 与 .IrIWsq_root 各画一次，叠加后
+     比主区域实得多；这里给侧边栏加一层毛玻璃，既统一质感，也让压在
+     人物上的文字背景更均匀。 */
+  backdrop-filter: blur(14px) saturate(1.1);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+}
 
 /* ── 5 · 品牌标识：自绘金鱼替换默认 mark ──────────────────────────
    官方 mark 由 dsh-client-ui-brand-official 注册进 sidebar.brand.mark，

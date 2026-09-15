@@ -2629,7 +2629,8 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
 
       const play = async (song) => {
         setCurrent(song);
-        render();
+        // 只改行标记，不重建列表——见 markCurrent 的注释
+        markCurrent();
         if (!canPlay || song === null) return;
         const src = '/yoimiya-music/audio?name=' + encodeURIComponent(song.audio);
 
@@ -2707,6 +2708,25 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
         }
       };
 
+      /**
+       * 只更新「当前播放」的行标记，不重建列表。
+       *
+       * 切歌走这个，不要走 render()：render 会先清空整个列表再逐行重建，N 首歌
+       * 就是每次切歌 O(N) 的 createElement + addEventListener + backgroundImage
+       * 写入——而自动续播（ended → 下一首）也会触发它。
+       * 行序与 songs 一一对应，因为 render 就是按 songs 顺序 append 的。
+       */
+      const markCurrent = () => {
+        const rows = listEl.children;
+        for (let i = 0; i < songs.length; i++) {
+          const row = rows[i];
+          if (row === undefined) break;
+          if (songs[i].id === currentId) row.dataset.current = 'true';
+          else row.removeAttribute('data-current');
+        }
+      };
+
+      /** 重建整个列表。只在曲库内容变化时用（刷新、增删）。 */
       const render = () => {
         // 每次列表刷新也重算封面区：给当前这首换完封面后，refresh 会走到这里，
         // 只靠 setCurrent 更新的话要等用户重新点一次歌才看得到。
@@ -2942,13 +2962,14 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
         coverNode: coverDialog.node,
         closeDialog: () => { dialog.close(); crop.close(); coverDialog.close(); },
         isDialogOpen: () => dialog.isOpen(),
-        // 曲库只在打开面板时读一次；不轮询——列表是用户在面板里改的，
-        // 没有理由每几秒去扫一遍磁盘
-        startPolling: () => { void refresh(); },
+        // 曲库只在打开面板时读一次；【不轮询】——列表是用户在面板里改的，
+        // 没有理由每几秒去扫一遍磁盘。这两个钩子因此不叫 start/stopPolling：
+        // 以前叫那个名字，读代码的人会以为这里有个定时器要管。
+        onOpen: () => { void refresh(); },
         // 【关面板不停音乐】。此前这里调了 audio.pause()，于是"收起面板"
         // 等于"停止播放"——而面板会因为点界面外而自动收起，等于随便点一下
-        // 歌就断了。面板是控件，不是播放器的电源开关。
-        stopPolling: () => {},
+        // 歌就断了。面板是控件，不是播放器的电源开关。所以这里是空的。
+        onClose: () => {},
       };
     }
     const ICON_FIREWORK = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" '
@@ -3117,8 +3138,8 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
           panels[k].dataset.open = String(on);
           buttons[k].setAttribute('aria-expanded', String(on));
         });
-        if (open && key === 'music') music.startPolling();
-        else { music.stopPolling(); music.closeDialog(); }
+        if (open && key === 'music') music.onOpen();
+        else { music.onClose(); music.closeDialog(); }
 
         stopStats();
         if (open && key === 'fx') {
@@ -3141,7 +3162,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
 
       return () => {
         stopStats();
-        music.stopPolling();
+        music.onClose();
         document.removeEventListener('keydown', onEsc);
         dock.remove();
       };

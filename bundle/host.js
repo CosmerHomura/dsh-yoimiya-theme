@@ -68,26 +68,45 @@ function safeName(raw) {
 
 const stemOf = (name) => name.slice(0, name.length - extname(name).length);
 
-/** 扫目录得出曲库。封面按同名同目录匹配，没有就是没有。 */
-async function listSongs() {
-  await mkdir(MUSIC_DIR, { recursive: true });
-  const entries = await readdir(MUSIC_DIR, { withFileTypes: true });
-  const files = entries.filter((e) => e.isFile()).map((e) => e.name);
-  const songs = [];
-  for (const name of files) {
-    if (!AUDIO_EXT.has(extname(name).toLowerCase())) continue;
-    const stem = stemOf(name);
-    const cover = files.find(
-      (f) => IMAGE_EXT.has(extname(f).toLowerCase()) && stemOf(f) === stem,
-    );
+/**
+ * 扫目录得出曲库。封面按同名同目录匹配，没有就是没有。
+ * @param scanDir - 要扫的目录，默认曲库目录。可传参是为了能被测试直接调用，
+ *   不必去动用户的真实曲库。
+ */
+async function listSongs(scanDir = MUSIC_DIR) {
+  await mkdir(scanDir, { recursive: true });
+  const entries = await readdir(scanDir, { withFileTypes: true });
+
+  // 先把封面收成 stem → 文件名 的表。原先是每首歌都 files.find 扫一遍整个
+  // 目录、每个组合都要算两次 extname/stemOf（各自分配字符串），300 首歌配
+  // 300 张封面就是约 9 万次配对比较。表化后是一次遍历。
+  // 同名多扩展名时取 readdir 顺序里的第一个，与原 find 的取法一致。
+  const covers = new Map();
+  const audio = [];
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const name = entry.name;
+    const ext = extname(name).toLowerCase();
+    if (AUDIO_EXT.has(ext)) audio.push(name);
+    else if (IMAGE_EXT.has(ext)) {
+      const stem = stemOf(name);
+      if (!covers.has(stem)) covers.set(stem, name);
+    }
+  }
+
+  // stat 并发取。原来是 await 在循环里，一首歌一个 libuv 往返，延迟随曲库
+  // 线性增长；这些 stat 互不依赖，没有理由排队。
+  const songs = await Promise.all(audio.map(async (name) => {
     let size = 0;
     try {
-      size = (await stat(join(MUSIC_DIR, name))).size;
+      size = (await stat(join(scanDir, name))).size;
     } catch {
       /* 列举途中被删掉就按 0 记，不用为此中断整次列举 */
     }
-    songs.push({ id: name, title: stem, audio: name, image: cover ?? null, size });
-  }
+    const stem = stemOf(name);
+    return { id: name, title: stem, audio: name, image: covers.get(stem) ?? null, size };
+  }));
+
   songs.sort((a, b) => a.title.localeCompare(b.title, 'zh'));
   return songs;
 }
@@ -361,3 +380,8 @@ export default {
     });
   },
 };
+
+// 只为测试导出：tools/test-list-songs.mjs 在临时目录上直接调用它，验证封面配对
+// 与排序，不必去动用户的真实曲库。cordis 只读 default 上的 apply/inject，
+// 这个具名导出不影响加载。
+export { listSongs };

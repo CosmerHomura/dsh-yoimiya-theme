@@ -1778,8 +1778,8 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-crop-hint { color: #7C6A56; }
           back.dataset.open = 'false';
           error.hidden = true;
           error.textContent = '';
-          document.removeEventListener('dragover', guardDrag, true);
-          document.removeEventListener('drop', guardDrag, true);
+          window.removeEventListener('dragover', guardDrag, true);
+          window.removeEventListener('drop', guardDrag, true);
         };
         const open = () => {
           audioZone.reset();
@@ -1788,8 +1788,8 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-crop-hint { color: #7C6A56; }
           confirm.textContent = '添加';
           sync();
           back.dataset.open = 'true';
-          document.addEventListener('dragover', guardDrag, true);
-          document.addEventListener('drop', guardDrag, true);
+          window.addEventListener('dragover', guardDrag, true);
+          window.addEventListener('drop', guardDrag, true);
         };
 
         cancel.addEventListener('click', close);
@@ -1991,17 +1991,34 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-crop-hint { color: #7C6A56; }
           }
         };
 
+        // 失败必须说清是哪一种：路由未注册时请求会落到 DSH 的 404，而它的
+        // 响应体是空的——以前在这里会被 JSON.parse 吃掉，界面上只剩一句
+        // 「上传失败」，把「路由没注册」伪装成「上传失败」，根本查不下去。
         const upload = async (file, name) => {
+          const url = '/yoimiya-music/upload?name=' + encodeURIComponent(name);
+          let res;
           try {
-            const res = await fetch('/yoimiya-music/upload?name=' + encodeURIComponent(name), {
-              method: 'POST',
-              body: file,
-            });
-            const r = await res.json();
-            return r.ok === true;
-          } catch {
-            return false;
+            res = await fetch(url, { method: 'POST', body: file });
+          } catch (err) {
+            return { ok: false, detail: '请求发不出去：' + (err?.message ?? '未知') };
           }
+          const text = await res.text().catch(() => '');
+          let parsed = null;
+          try {
+            parsed = JSON.parse(text);
+          } catch {
+            parsed = null;
+          }
+          if (parsed === null) {
+            return {
+              ok: false,
+              detail: 'HTTP ' + res.status + ' 且响应不是 JSON（空响应＝路由没注册）',
+            };
+          }
+          if (res.ok !== true || parsed.ok !== true) {
+            return { ok: false, detail: 'HTTP ' + res.status + ' · ' + (parsed.reason ?? '未知原因') };
+          }
+          return { ok: true, detail: '' };
         };
 
         // 添加走弹窗：歌曲（必须）+ 封面（非必须），两个框都支持拖入文件
@@ -2009,12 +2026,14 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-crop-hint { color: #7C6A56; }
 
         const dialog = createAddDialog(crop, async (audioFile, imageFile) => {
           const stem = String(audioFile.name).replace(/\.[^.]+$/, '');
-          if (await upload(audioFile, audioFile.name) !== true) throw new Error('歌曲上传失败');
+          const sent = await upload(audioFile, audioFile.name);
+          if (sent.ok !== true) throw new Error('歌曲上传失败 · ' + sent.detail);
           if (imageFile !== null) {
             // 封面改名与歌曲同名——服务端按 basename 配对，名字不同就配不上。
             // 扩展名固定 .webp：裁切器输出的就是 WebP，写成别的格式服务端会
             // 按错误的 MIME 提供，缩略图可能显示不出来。
-            await upload(imageFile, stem + '.webp');
+            const coverSent = await upload(imageFile, stem + '.webp');
+            if (coverSent.ok !== true) throw new Error('封面上传失败 · ' + coverSent.detail);
           }
           await refresh();
         });

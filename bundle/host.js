@@ -266,27 +266,44 @@ export default {
       registered += 1;
     }
 
-    try {
-      const disposeMusic = ctx.webServer.register({
-        kind: 'prefix',
-        path: MUSIC_ROOT,
-        handler: (req, res) => {
-          let url;
-          try {
-            url = new URL(req.url ?? '/', 'http://localhost');
-          } catch {
-            sendJson(res, { ok: false, reason: 'bad-url' }, 400);
-            return;
-          }
-          return handleMusic(req, res, url);
-        },
-      });
-      ctx.effect(() => disposeMusic);
-      registered += 1;
-    } catch (e) {
-      console.warn(`[yoimiya-theme] 路由 ${MUSIC_ROOT} 已被其他实例占用，跳过:`, e?.message ?? e);
+    // 动作路由一律用 exact：exact 是本主题已经在用的、有实证的注册方式
+    // （资源路由就靠它工作）；prefix 只是从 DSH 源码读出来的能力，没有实测。
+    // 把「列举 / 上传 / 删除」压在 exact 上，只有必须按文件名访问的音频流
+    // 才依赖 prefix——这样即使 prefix 有问题，也只是放不了歌，而不是加不进歌。
+    const musicHandler = (req, res) => {
+      let url;
+      try {
+        url = new URL(req.url ?? '/', 'http://localhost');
+      } catch {
+        sendJson(res, { ok: false, reason: 'bad-url' }, 400);
+        return Promise.resolve();
+      }
+      return handleMusic(req, res, url);
+    };
+
+    for (const action of ['list', 'upload', 'delete']) {
+      const path = `${MUSIC_ROOT}/${action}`;
+      try {
+        const disposeAction = ctx.webServer.register({ kind: 'exact', path, handler: musicHandler });
+        ctx.effect(() => disposeAction);
+        registered += 1;
+      } catch (e) {
+        console.warn(`[yoimiya-theme] 路由 ${path} 已被其他实例占用，跳过:`, e?.message ?? e);
+      }
     }
 
-    console.log(`[yoimiya-theme] Host 半边就绪（${registered}/${ROUTES.length + 1} 条路由），曲库目录 ${MUSIC_DIR}`);
+    try {
+      const disposeFiles = ctx.webServer.register({
+        kind: 'prefix',
+        path: `${MUSIC_ROOT}/file`,
+        handler: musicHandler,
+      });
+      ctx.effect(() => disposeFiles);
+      registered += 1;
+    } catch (e) {
+      console.warn(`[yoimiya-theme] 路由 ${MUSIC_ROOT}/file 已被其他实例占用，跳过:`, e?.message ?? e);
+    }
+
+    console.log(`[yoimiya-theme] Host 半边就绪（${registered}/${ROUTES.length + 4} 条路由），曲库目录 ${MUSIC_DIR}`);
   },
 };

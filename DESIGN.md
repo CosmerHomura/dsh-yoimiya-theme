@@ -439,25 +439,47 @@ const INTENSITY = 'standard'; // 'standard' | 'calm' | 'plain'
 ——这也是当初放弃程序化扩图的原因。
 ---
 
-## 10. 开发时的两个陷阱（都会伪装成「代码没生效」）
+## 10. 开发时的三个陷阱（都会伪装成「代码没生效」）
 
-这两条都实际踩过，而且现象一模一样：改了代码、刷新页面、毫无变化。
+这三条都实际踩过，而且现象一模一样：改了代码、刷新页面、毫无变化。
 
-### 10.1 改 Host 半边必须【完全重启】DSH
-
-两半边的加载方式不同，代价也不同：
+### 10.1 两半边的重载代价不同：浏览器半边存盘即可，Host 半边必须【完全重启】
 
 | 半边 | 怎么被加载 | 什么时候重新读 |
 | --- | --- | --- |
-| 浏览器半边 `bundle/client.js` | 浏览器通过 HTTP 拉取 | 插件重组会换 URL，**刷新页面即可** |
+| 浏览器半边 `bundle/client.js` | 浏览器通过 HTTP 拉取 | `client-hmr` 每 500ms 轮询自动重新哈希，**存盘就够了，刷新页面生效** |
 | Host 半边 `bundle/host.js` | DSH 进程 `import()` | **Node 的 ESM 模块缓存按 URL 缓存**：同一路径永远返回首次加载的那一份。只有**完全重启 DSH** 才会重读 |
+
+浏览器半边为什么不需要任何额外动作——读 `@deepseek-ai/dsh-client-hmr/lib/index.js` 与 `dsh-client-modules/lib/index.js` 得到，并已实测：
+
+- `client-hmr` 每 500ms 对**每个**插件包 `stat` 一次 `mtimeMs` 与 `size`；
+- 一变就调 `clientModules.rebuilt(id)`：`readFileSync` 新字节、算出新 `rev`、重组 graph，并通过 `/plugins/events` 的 SSE 推 `rebuilt` 帧给浏览器；
+- 插件包的 URL 形如 `/plugins/??<id>/client.js&rev=<rev>`，而 `rev` 是**包内容的 sha1 前 12 位**，URL 一变自然绕过 `max-age=31536000` 的不可变缓存。
+
+所以**「改 client.js 得先触发一次插件重组」是错的**，不必再去改 `cordis.patch.yml` 做关机开机。真正需要的只有页面的刷新（SSE 通着的时候连刷新都会自动发生）。
+
+顺带纠正一个假线索：裸的 `/plugins/<id>/client.js` **不是路由**，只会 404。真身只有 combo 形式 `/plugins/??<id>/client.js&rev=<rev>`。
+
+**不打开浏览器也能确认服务端手里是哪一版**：按同一套算法复算当前文件的 `rev`，再和运行中 graph 的 `rev` 比。取 graph 用 `/plugins/events`（响应的首个 `data:` 帧就是全量 entry 列表，拿到即断开）：
+
+```js
+const HASH_REVISION_LENGTH = 12;
+const framedHash = (domain, parts) => {
+  const h = createHash('sha1').update(domain).update('\0');
+  for (const part of parts) h.update(`${part.byteLength}:`).update(part);
+  return h.digest('hex').slice(0, HASH_REVISION_LENGTH);
+};
+const rev = framedHash('plugin-artifact', [readFileSync('bundle/client.js')]);
+```
+
+两个 `rev` 相等 ⇒ 服务端已经是新字节，剩下的纯粹是浏览器缓存问题；不等才是真的没生效。
 
 推论：**Host 半边的新路由、新脚本调用，在没有重启之前一律不存在。** 表现是请求落到 DSH 的 `frontend-static` 兜底：
 
 - `GET` 未知路径 → **404**（空响应体）
 - 非 `GET`/`HEAD` → **405**（空响应体）
 
-`405` 因此是一个很有用的信号：它说明「路由没注册」，而不是「路由拒绝了请求」。看到 404 与 405 都先怀疑这一条，不要去改业务逻辑。
+`404` 与 `405` 都只说明「路由没注册」，不代表「路由拒绝了请求」。看到它们先怀疑这一条，不要去改业务逻辑。
 
 ### 10.2 客户端不要吞掉失败原因
 

@@ -361,17 +361,15 @@ DSH 组件样式表用 CSS Modules，类名形如 `<构建哈希>_<局部名>`�
 
 ## 7. 安装与回滚
 
-当前沙箱只能写 `F:\dsh插件\宵宫主题`，安装到
-`%APPDATA%\dsh-desktop\harness\profiles\web` 需要额外授权或由你手动执行。
+面向使用者的安装、卸载步骤见 [`README.md`](./README.md)。本节只记录两条对本
+主题成立的机制性事实：
 
-| 方式 | 命令 / 操作 |
-| --- | --- |
-| 官方 CLI（推荐） | `dsh plugin --profile web add <本目录路径>` |
-| DSH Market | 已安装 `dshmarket`，可从 GitHub 源安装（需先把本目录推到仓库） |
-| 手动 | 包放入 `profiles/web/node_modules/`，并在 `package.json` 的 `dependencies` 与 `dsh.profile.bundles` 中登记，再 `pnpm install` |
-
-**回滚**：从 `dsh.profile.bundles` 移除 `dsh-yoimiya-theme` 即恢复原样；
-`overrideTokens` 层随插件卸载自动撤销，不留残留。
+- **本地安装不必手改 bundles 列表。** 桌面端的投影里有
+  `const dependencies = { ...currentDeps }`（真实 profile 依赖原样保留），并且会
+  把「声明了 `dsh.bundle.patch` 的依赖」自动纳入 `dsh.profile.bundles`。所以本地
+  安装只需一条 `pnpm add file:<目录>`；卸载同理只需要 `pnpm remove`。
+- **卸载不留残留。** `overrideTokens` 是叠加层而非主题注册，插件卸载时 token
+  与样式表一并撤销。
 
 ---
 
@@ -397,3 +395,61 @@ DSH 组件样式表用 CSS Modules，类名形如 `<构建哈希>_<局部名>`�
 
 **可看的效果**：`preview.html`——免安装的静态预览，右下角可切明暗档与
 对话阶段，用来直观确认立绘的退让行为与两档配色。
+
+---
+
+## 9. 附录 · 改配色与换图
+
+面向要改动本主题的人。README 只讲安装，操作细节放在这里。
+
+### 9.1 背景强度
+
+`bundle/client.js` 顶部一个常量：
+
+```js
+const INTENSITY = 'standard'; // 'standard' | 'calm' | 'plain'
+```
+
+| 档 | 效果 | 场景 |
+| --- | --- | --- |
+| `standard` | 完整背景 | 默认 |
+| `calm` | 背景层透明度 ×0.5 | 长时间阅读 |
+| `plain` | 压到 6%，且不加载烟花场景 | 完全无干扰 |
+
+`INTENSITY` 同时缩放遮罩与天空层，因此三档的对比度都保持在达标区间内。
+
+### 9.2 改配色
+
+`bundle/client.js` 里的 `TOKENS` 表就是全部配色，每项写成 `p(亮档值, 暗档值)`。
+改完跑一遍自检，对比度不达标会直接失败。
+
+> 每个 token 必须是 `p(light, dark)` 两档形式。写成裸字符串会让 DSH 的
+> `validateOverrides` 抛 `TypeError`——这是有意设计，因为单一取值在用户切换
+> 明暗后必然变得不可读。
+
+### 9.3 换壁纸
+
+壁纸是 16:9 宽幅图，人物在画面左侧。换图前先量出人物落在画面哪个位置，
+因为 hero 遮罩的方向取决于它：
+
+```bash
+node tools/analyze-edges.mjs
+```
+
+然后核对三处：
+
+- `body::before` 的 `background-size: cover` + `background-position: left 38%`。
+  横向 `left` 保证窄高视口裁切时从右侧切、保住人物；纵向 `38%` 让带鱼屏上的
+  纵向裁切偏向上方，优先保住头部。人物若在画面右侧，`left` 要改成 `right`。
+- hero 遮罩是**左轻右重的横向渐变**（`linear-gradient(96deg, …)`）。人物在左、
+  DSH 标题居中，所以必须这样；人物若在右，整条渐变要反过来，否则会同时压暗
+  人物又让标题落在亮区。
+- 亮档的和纸洗色在 `body:not([data-ds-dark-theme])::before` 的 `filter` 里，
+  换图后按需要调 `sepia` / `brightness`。
+
+壁纸很亮时（例如带明亮云层），把 `INTENSITY` 调到 `'calm'` 会更护眼。
+
+`tools/outpaint.mjs` 是程序化扩图脚本（只向右扩、接缝中位台阶 1.0 亮度级、
+原图零改动），在拿到 AI 扩图之前用过。它**补不了被画框切断的头发和衣料**——
+那正是需要 AI 扩图的地方。留作参考。
+

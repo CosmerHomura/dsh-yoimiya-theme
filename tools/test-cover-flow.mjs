@@ -137,12 +137,24 @@ await new Promise((r) => setTimeout(r, 20));
 const line = findByClass(body, 'dsh-yoimiya-music-now');
 console.log('  曲目行文字:', line.textContent);
 
-const picker = findByClass(body, 'dsh-yoimiya-music-picker');
-picker.files = [{ name: 'cover.jpg', type: 'image/jpeg', size: 1000 }];
-picker.fire('change');
+// 新的封面路径：点缩略图 → 打开封面弹窗 → 往拖放区丢文件 → 裁切 → 上传
+const coverBack = findByClass(body, 'dsh-yoimiya-modal-back');
+let coverDialog = null;
+(function walk(n) {
+  if (n.className && String(n.className).includes('dsh-yoimiya-modal-back') && n.dataset.open === 'true') coverDialog = n;
+  n.children.forEach(walk);
+})(body);
+console.log('  封面弹窗已打开:', coverDialog !== null);
+console.log('  弹窗标题:', coverDialog ? (findByText(coverDialog, '设置封面') !== null) : false);
+
+const drop = coverDialog ? findByClass(coverDialog, 'dsh-yoimiya-drop') : null;
+console.log('  拖放区存在:', drop !== null);
+drop.fire('drop', {
+  preventDefault() {},
+  dataTransfer: { files: [{ name: 'cover.jpg', type: 'image/jpeg', size: 1000 }] },
+});
 await new Promise((r) => setTimeout(r, 40));
 
-console.log('  触发 change 后文字:', line.textContent);
 const cropBack = findByClass(body, 'dsh-yoimiya-crop-back');
 console.log('  裁切弹窗 data-open:', cropBack.dataset.open);
 
@@ -150,9 +162,9 @@ if (cropBack.dataset.open === 'true') {
   const confirm = findByText(cropBack, '使用这张');
   console.log('  确认按钮:', confirm !== null);
   confirm.click();
-  await new Promise((r) => setTimeout(r, 40));
-  console.log('  确认后文字:', line.textContent);
-  console.log('  确认后弹窗:', cropBack.dataset.open);
+  await new Promise((r) => setTimeout(r, 60));
+  console.log('  确认后封面弹窗:', coverBack.dataset.open);
+  console.log('  确认后曲目行:', findByClass(body, 'dsh-yoimiya-music-now').textContent);
 }
 
 console.log('');

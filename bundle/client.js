@@ -1242,7 +1242,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
       // 构建立即版本标记：面板上显示出来，这样"跑的是哪一版"一眼可判。
       // 起因是反复出现"改了但界面没变"——而客户端与 Host 半边的生效代价不同
       // （前者刷新、后者必须完全重启），没有标记就只能靠猜。
-      const BUILD_TAG = 'v24';
+      const BUILD_TAG = 'v25';
 
       const PARTICLE_KEY = 'dsh-yoimiya-particles-v1';
       const PARTICLE_DEFAULT = { on: true, speed: 1, density: 1, burst: 1 };
@@ -1737,6 +1737,174 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
             && typeof document.createElement('canvas').getContext === 'function',
         };
       }
+      /**
+       * 更换封面对话框。
+       *
+       * 【为什么单独做一个弹窗，而不是让列表里的缩略图直接触发文件选择器】
+       * 缩略图那条路依赖 `<input type=file>` 的 change 事件，实测在真实环境里
+       * 选择文件后事件没有触发到处理函数，表现是「选择界面关闭后就没反应」，
+       * 而模拟测试跑通、无法复现。于是改用与「添加歌曲」完全相同的拖放区
+       * 模式：那条路已经被实际使用验证过（拖入文件可以工作）。
+       *
+       * 拖入与点击两条路都保留，拖入是主路径。
+       */
+      function createCoverDialog(crop, onSubmit) {
+        const back = document.createElement('div');
+        back.className = 'dsh-yoimiya-modal-back';
+        back.dataset.open = 'false';
+
+        const box = document.createElement('div');
+        box.className = 'dsh-yoimiya-modal';
+        box.setAttribute('role', 'dialog');
+        box.setAttribute('aria-modal', 'true');
+        box.setAttribute('aria-label', '设置封面');
+
+        const title = document.createElement('div');
+        title.className = 'dsh-yoimiya-modal-title';
+        title.textContent = '设置封面';
+
+        const target = document.createElement('div');
+        target.className = 'dsh-yoimiya-cover-for';
+
+        const zone = document.createElement('div');
+        zone.className = 'dsh-yoimiya-drop';
+        zone.dataset.zone = 'cover';
+        zone.tabIndex = 0;
+        zone.setAttribute('role', 'button');
+        zone.setAttribute('aria-label', '封面（必须）');
+
+        const head = document.createElement('div');
+        head.className = 'dsh-yoimiya-drop-head';
+        const name = document.createElement('span');
+        name.className = 'dsh-yoimiya-drop-label';
+        name.textContent = '封面图片';
+        const badge = document.createElement('span');
+        badge.className = 'dsh-yoimiya-drop-badge';
+        badge.dataset.required = 'true';
+        badge.textContent = '必须';
+        head.append(name, badge);
+
+        const hint = document.createElement('div');
+        hint.className = 'dsh-yoimiya-drop-hint';
+        hint.textContent = '拖入图片，或点击选择（选好后会进入裁切）';
+
+        const picker = document.createElement('input');
+        picker.type = 'file';
+        picker.accept = 'image/*';
+        picker.className = 'dsh-yoimiya-music-picker';
+
+        zone.append(head, hint, picker);
+
+        const error = document.createElement('div');
+        error.className = 'dsh-yoimiya-modal-error';
+        error.hidden = true;
+
+        const actions = document.createElement('div');
+        actions.className = 'dsh-yoimiya-modal-actions';
+        const cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'dsh-yoimiya-modal-btn';
+        cancel.textContent = '取消';
+        actions.append(cancel);
+
+        box.append(title, target, zone, error, actions);
+        back.append(box);
+
+        let current = null;
+        let busy = false;
+
+        const setHint = (text, filled) => {
+          hint.textContent = text;
+          zone.dataset.filled = String(filled);
+        };
+
+        // 选中文件后立刻进裁切，然后上传——中间不插入第二个确认步骤，
+        // 因为裁切弹窗本身就是那一步确认。
+        const accept = async (file) => {
+          if (file === undefined || file === null || current === null || busy) return;
+          busy = true;
+          error.hidden = true;
+          if (!crop.isUsable()) {
+            busy = false;
+            error.hidden = false;
+            error.textContent = '当前环境不支持裁切，无法统一封面尺寸';
+            return;
+          }
+          setHint(file.name + ' · 裁切中…', true);
+          const cropped = await crop.open(file);
+          if (cropped === null) {
+            busy = false;
+            setHint('已取消裁切，可重新拖入', false);
+            return;
+          }
+          setHint(file.name + ' · 上传中…', false);
+          try {
+            await onSubmit(current, cropped);
+          } catch (err) {
+            busy = false;
+            error.hidden = false;
+            error.textContent = '上传失败：' + (err?.message ?? '未知原因');
+            setHint('上传失败，可重试', false);
+            return;
+          }
+          busy = false;
+          back.dataset.open = 'false';
+          setHint('拖入图片，或点击选择（选好后会进入裁切）', false);
+        };
+
+        picker.addEventListener('change', () => {
+          const list = picker.files;
+          const file = list !== undefined && list !== null && list.length > 0 ? list[0] : null;
+          picker.value = '';
+          void accept(file);
+        });
+
+        zone.addEventListener('click', () => {
+          if (typeof picker.click === 'function') picker.click();
+        });
+        zone.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            if (typeof picker.click === 'function') picker.click();
+          }
+        });
+        zone.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          zone.dataset.over = 'true';
+        });
+        zone.addEventListener('dragleave', () => {
+          zone.dataset.over = 'false';
+        });
+        zone.addEventListener('drop', (e) => {
+          e.preventDefault();
+          zone.dataset.over = 'false';
+          const dt = e.dataTransfer;
+          void accept(dt === undefined || dt === null || dt.files === undefined || dt.files === null ? null : dt.files[0]);
+        });
+
+        cancel.addEventListener('click', () => {
+          back.dataset.open = 'false';
+          error.hidden = true;
+          setHint('拖入图片，或点击选择（选好后会进入裁切）', false);
+        });
+        box.addEventListener('click', (e) => e.stopPropagation());
+
+        const open = (song) => {
+          current = song;
+          busy = false;
+          error.hidden = true;
+          target.textContent = song.title;
+          setHint('拖入图片，或点击选择（选好后会进入裁切）', false);
+          back.dataset.open = 'true';
+        };
+
+        return {
+          node: back,
+          open,
+          close: () => { back.dataset.open = 'false'; },
+          isOpen: () => back.dataset.open === 'true',
+        };
+      }
       function createAddDialog(crop, onSubmit) {
         const back = document.createElement('div');
         back.className = 'dsh-yoimiya-modal-back';
@@ -2104,56 +2272,6 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
           }
         };
 
-        // 封面选择器（列表行共用）：一次只服务一首歌，选完即清
-        const coverPicker = document.createElement('input');
-        coverPicker.type = 'file';
-        coverPicker.accept = 'image/*';
-        coverPicker.className = 'dsh-yoimiya-music-picker';
-        let coverFor = null;
-
-        // 每一步都写在曲目行上：封面这条链路有四步（选文件 → 裁切 → 上传 →
-        // 刷新），任何一步静默失败都会表现成"点了没反应"，逐段报出才能定位。
-        const uploadCover = async (song, file) => {
-          line.textContent = song.title + ' · 裁切封面…';
-          const cropped = await crop.open(file);
-          if (cropped === null) {
-            // null 有两个来源：用户点了「不用封面」，或环境不支持裁切
-            // （没有 Image / createObjectURL）。两者必须分辨，否则
-            // "点了没反应"会被误当成用户自己取消。
-            line.textContent = song.title + ' · ' + (crop.isUsable() ? '已取消裁切' : '环境不支持裁切');
-            return;
-          }
-          line.textContent = song.title + ' · 上传封面…';
-          const stem = String(song.audio).replace(/\.[^.]+$/, '');
-          const sent = await upload(cropped, stem + '.webp');
-          if (sent.ok !== true) {
-            line.textContent = song.title + ' · 封面失败：' + sent.detail;
-            return;
-          }
-          await refresh();
-          line.textContent = song.title + ' · 封面已更新';
-        };
-
-        // 【必须先取出 File，再清空 input】。input.files 是活引用，value = ''
-        // 会把它一起清掉——先清空再判断 length，条件永远成立，函数直接返回，
-        // 表现为「选择器弹出来了、选了图、然后毫无反应」。这是本主题里
-        // 「不能加封面」的真正原因，添加歌曲那条路没踩到是因为它先读了 list[0]。
-        coverPicker.addEventListener('change', () => {
-          const list = coverPicker.files;
-          const file = list !== undefined && list !== null && list.length > 0 ? list[0] : null;
-          coverPicker.value = '';
-          if (file === null || coverFor === null) return;
-          const song = coverFor;
-          coverFor = null;
-          void uploadCover(song, file);
-        });
-
-        const pickCover = (song) => {
-          coverFor = song;
-          line.textContent = song.title + ' · 选择封面图片…';
-          if (typeof coverPicker.click === 'function') coverPicker.click();
-        };
-
         const render = () => {
           listEl.textContent = '';
           if (songs.length === 0) {
@@ -2275,7 +2393,19 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
 
         // 添加走弹窗：歌曲（必须）+ 封面（非必须），两个框都支持拖入文件
         const crop = createCropDialog();
+        const coverDialog = createCoverDialog(crop, async (song, blob) => {
+          const stem = String(song.audio).replace(/\.[^.]+$/, '');
+          const sent = await upload(blob, stem + '.webp');
+          if (sent.ok !== true) throw new Error(sent.detail);
+          await refresh();
+        });
 
+        // 缩略图点击 → 打开封面弹窗。走拖放区模式而不是直接触发文件选择器：
+        // 后者依赖 change 事件，实测在真实环境里选择文件后没有回调到处理函数。
+        const pickCover = (song) => {
+          line.textContent = song.title + ' · 设置封面…';
+          coverDialog.open(song);
+        };
         const dialog = createAddDialog(crop, async (audioFile, imageFile) => {
           const stem = String(audioFile.name).replace(/\.[^.]+$/, '');
           const sent = await upload(audioFile, audioFile.name);
@@ -2357,13 +2487,14 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
         audio.className = 'dsh-yoimiya-music-audio';
         // 列表放在播放控件【上方】：面板锚在右下角，往上长比往下长更符合预期，
         // 也不会把控件挤出视口。数量多时靠 max-height + overflow 滚动。
-        wrap.append(line, listEl, prog, bar, volRow, buildTag, coverPicker, audio);
+        wrap.append(line, listEl, prog, bar, volRow, buildTag, audio);
 
         return {
           node: wrap,
           dialogNode: dialog.node,
           cropNode: crop.node,
-          closeDialog: () => { dialog.close(); crop.close(); },
+          coverNode: coverDialog.node,
+          closeDialog: () => { dialog.close(); crop.close(); coverDialog.close(); },
           isDialogOpen: () => dialog.isOpen(),
           // 曲库只在打开面板时读一次；不轮询——列表是用户在面板里改的，
           // 没有理由每几秒去扫一遍磁盘
@@ -2519,7 +2650,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
           else { music.stopPolling(); music.closeDialog(); }
         };
 
-        dock.append(fxPanel, musicPanel, btns, music.dialogNode, music.cropNode);
+        dock.append(fxPanel, musicPanel, btns, music.dialogNode, music.cropNode, music.coverNode);
         dropStale('.dsh-yoimiya-dock');
         document.body.append(dock);
 

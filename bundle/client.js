@@ -1242,7 +1242,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
       // 构建立即版本标记：面板上显示出来，这样"跑的是哪一版"一眼可判。
       // 起因是反复出现"改了但界面没变"——而客户端与 Host 半边的生效代价不同
       // （前者刷新、后者必须完全重启），没有标记就只能靠猜。
-      const BUILD_TAG = 'v23';
+      const BUILD_TAG = 'v24';
 
       const PARTICLE_KEY = 'dsh-yoimiya-particles-v1';
       const PARTICLE_DEFAULT = { on: true, speed: 1, density: 1, burst: 1 };
@@ -2104,9 +2104,16 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
         coverPicker.className = 'dsh-yoimiya-music-picker';
         let coverFor = null;
 
+        // 每一步都写在曲目行上：封面这条链路有四步（选文件 → 裁切 → 上传 →
+        // 刷新），任何一步静默失败都会表现成"点了没反应"，逐段报出才能定位。
         const uploadCover = async (song, file) => {
+          line.textContent = song.title + ' · 裁切封面…';
           const cropped = await crop.open(file);
-          if (cropped === null) return;   // 用户取消了裁切
+          if (cropped === null) {
+            line.textContent = song.title + ' · 已取消裁切';
+            return;
+          }
+          line.textContent = song.title + ' · 上传封面…';
           const stem = String(song.audio).replace(/\.[^.]+$/, '');
           const sent = await upload(cropped, stem + '.webp');
           if (sent.ok !== true) {
@@ -2114,6 +2121,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
             return;
           }
           await refresh();
+          line.textContent = song.title + ' · 封面已更新';
         };
 
         // 【必须先取出 File，再清空 input】。input.files 是活引用，value = ''
@@ -2132,6 +2140,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
 
         const pickCover = (song) => {
           coverFor = song;
+          line.textContent = song.title + ' · 选择封面图片…';
           if (typeof coverPicker.click === 'function') coverPicker.click();
         };
 
@@ -2349,9 +2358,10 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
           // 曲库只在打开面板时读一次；不轮询——列表是用户在面板里改的，
           // 没有理由每几秒去扫一遍磁盘
           startPolling: () => { void refresh(); },
-          stopPolling: () => {
-            if (canPlay) audio.pause();
-          },
+          // 【关面板不停音乐】。此前这里调了 audio.pause()，于是"收起面板"
+          // 等于"停止播放"——而面板会因为点界面外而自动收起，等于随便点一下
+          // 歌就断了。面板是控件，不是播放器的电源开关。
+          stopPolling: () => {},
         };
       }
       const ICON_FIREWORK = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" '
@@ -2503,27 +2513,16 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
         dropStale('.dsh-yoimiya-dock');
         document.body.append(dock);
 
-        // 窗口刚重获焦点的第一次点击不算"点外部"：用户切换窗口回来时，那一下
-        // 往往只是为了让窗口获得焦点，不该顺手把面板收掉。
-        let focusedAt = 0;
-        const onWindowFocus = () => { focusedAt = Date.now(); };
-        window.addEventListener('focus', onWindowFocus);
-
-        const onDocClick = (e) => {
-          if (Date.now() - focusedAt < 500) return;
-          if (music.isDialogOpen()) return;   // 弹窗开着时只由弹窗自己关闭
-          if (!dock.contains(e.target)) setOpen(null, false);
-        };
+        // 【不做"点界面外自动收起"】。这是个播放器：用户会一边听歌一边用 DSH，
+        // 随手点一下就把面板收掉、还（曾经）连带停掉音乐，纯属帮倒忙。
+        // 收起只由两个明确动作触发：再点一次图标、或按 Esc。
         const onEsc = (e) => {
           if (e.key === 'Escape') setOpen(null, false);
         };
-        document.addEventListener('click', onDocClick);
         document.addEventListener('keydown', onEsc);
 
         return () => {
-          window.removeEventListener('focus', onWindowFocus);
           music.stopPolling();
-          document.removeEventListener('click', onDocClick);
           document.removeEventListener('keydown', onEsc);
           dock.remove();
         };

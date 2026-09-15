@@ -20,15 +20,3 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
----
-
-NOTE ON BUNDLED ARTWORK
-
-This license covers the code and the original hand-authored SVG artwork
-(bundle/, tools/, preview.html, assets/bg-night.svg, assets/bg-day.svg,
-assets/mark.svg, assets/mark-day.svg).
-
-It does NOT cover the character illustration assets/yoimiya.jpg and
-assets/yoimiya-wide.jpg, which are Genshin Impact character artwork provided
-by the user for local personal use only. Those files are excluded from this
-repository via .gitignore and must not be redistributed.

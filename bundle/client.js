@@ -837,6 +837,167 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-row[data-current="true"] .dsh-
 body:not([data-ds-dark-theme]) .dsh-yoimiya-music-del { color: #7C6A56; }
 body:not([data-ds-dark-theme]) .dsh-yoimiya-music-del:hover { background: rgba(181, 80, 42, 0.16); color: #8E3A1E; }
 body:not([data-ds-dark-theme]) .dsh-yoimiya-music-dir { background: rgba(181, 80, 42, 0.09); color: #6B5A4A; }
+
+/* ── 添加歌曲弹窗 ─────────────────────────────────────────────────── */
+.dsh-yoimiya-modal-back {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 2147483001;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 6, 16, 0.62);
+}
+.dsh-yoimiya-modal-back[data-open="true"] { display: flex; }
+.dsh-yoimiya-modal {
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(224, 138, 60, 0.34);
+  background: rgba(24, 18, 30, 0.99);
+  color: #EDE3D3;
+  box-shadow: 0 22px 60px rgba(10, 6, 16, 0.6);
+  font: 12px/1.5 ui-sans-serif, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.dsh-yoimiya-modal-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  margin-bottom: 12px;
+}
+
+.dsh-yoimiya-drop {
+  display: block;
+  margin-top: 9px;
+  padding: 11px 12px;
+  border: 1px dashed rgba(224, 138, 60, 0.42);
+  border-radius: 10px;
+  background: rgba(224, 138, 60, 0.05);
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.dsh-yoimiya-drop:focus-visible {
+  outline: 2px solid rgba(224, 138, 60, 0.6);
+  outline-offset: 2px;
+}
+/* dragover 必须有明确反馈，否则用户不知道松手会不会生效 */
+.dsh-yoimiya-drop[data-over="true"] {
+  border-color: rgba(224, 138, 60, 0.95);
+  background: rgba(224, 138, 60, 0.16);
+}
+.dsh-yoimiya-drop[data-filled="true"] {
+  border-style: solid;
+  border-color: rgba(224, 138, 60, 0.60);
+  background: rgba(224, 138, 60, 0.10);
+}
+.dsh-yoimiya-drop-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dsh-yoimiya-drop-label { color: #EDE3D3; font-size: 12px; }
+.dsh-yoimiya-drop-badge {
+  font-size: 10px;
+  letter-spacing: .06em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(224, 138, 60, 0.45);
+  color: #F0B068;
+}
+.dsh-yoimiya-drop-badge[data-required="false"] {
+  border-color: rgba(185, 172, 156, 0.35);
+  color: #B9AC9C;
+}
+.dsh-yoimiya-drop-hint {
+  margin-top: 5px;
+  font-size: 11px;
+  color: #8A7F72;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dsh-yoimiya-drop[data-filled="true"] .dsh-yoimiya-drop-hint { color: #F0B068; }
+
+.dsh-yoimiya-modal-error {
+  margin-top: 9px;
+  font-size: 11px;
+  color: #E0909E;
+}
+.dsh-yoimiya-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+.dsh-yoimiya-modal-btn {
+  border: 1px solid rgba(224, 138, 60, 0.32);
+  border-radius: 8px;
+  background: transparent;
+  color: #B9AC9C;
+  font: inherit;
+  padding: 5px 16px;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.dsh-yoimiya-modal-btn:hover:not(:disabled) {
+  color: #F0B068;
+  border-color: rgba(224, 138, 60, 0.7);
+  background: rgba(224, 138, 60, 0.12);
+}
+.dsh-yoimiya-modal-btn:disabled { opacity: .45; cursor: default; }
+.dsh-yoimiya-modal-primary {
+  border-color: rgba(224, 138, 60, 0.75);
+  color: #F0B068;
+  background: rgba(224, 138, 60, 0.16);
+}
+.dsh-yoimiya-modal-btn:focus-visible {
+  outline: 2px solid rgba(224, 138, 60, 0.6);
+  outline-offset: 2px;
+}
+
+body:not([data-ds-dark-theme]) .dsh-yoimiya-modal-back { background: rgba(60, 44, 30, 0.42); }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-modal {
+  background: rgba(250, 244, 234, 0.99);
+  border-color: rgba(181, 80, 42, 0.30);
+  color: #33261C;
+  box-shadow: 0 22px 60px rgba(90, 60, 30, 0.28);
+}
+body:not([data-ds-dark-theme]) .dsh-yoimiya-drop {
+  border-color: rgba(181, 80, 42, 0.38);
+  background: rgba(181, 80, 42, 0.04);
+}
+body:not([data-ds-dark-theme]) .dsh-yoimiya-drop[data-over="true"] {
+  border-color: rgba(181, 80, 42, 0.9);
+  background: rgba(181, 80, 42, 0.14);
+}
+body:not([data-ds-dark-theme]) .dsh-yoimiya-drop[data-filled="true"] {
+  border-color: rgba(181, 80, 42, 0.55);
+  background: rgba(181, 80, 42, 0.09);
+}
+body:not([data-ds-dark-theme]) .dsh-yoimiya-drop-label { color: #33261C; }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-drop-badge {
+  border-color: rgba(181, 80, 42, 0.4);
+  color: #B5502A;
+}
+body:not([data-ds-dark-theme]) .dsh-yoimiya-drop-badge[data-required="false"] {
+  border-color: rgba(107, 90, 74, 0.32);
+  color: #6B5A4A;
+}
+body:not([data-ds-dark-theme]) .dsh-yoimiya-drop-hint { color: #7C6A56; }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-drop[data-filled="true"] .dsh-yoimiya-drop-hint { color: #B5502A; }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-modal-error { color: #8E3A1E; }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-modal-btn { border-color: rgba(181, 80, 42, 0.3); color: #6B5A4A; }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-modal-btn:hover:not(:disabled) {
+  color: #B5502A;
+  border-color: rgba(181, 80, 42, 0.7);
+  background: rgba(181, 80, 42, 0.1);
+}
+body:not([data-ds-dark-theme]) .dsh-yoimiya-modal-primary {
+  border-color: rgba(181, 80, 42, 0.7);
+  color: #B5502A;
+  background: rgba(181, 80, 42, 0.14);
+}
 `;
 
     // ══════════════════════════════════════════════════════════════
@@ -1167,6 +1328,177 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-dir { background: rgba(181, 80
        * 这里【不再控制系统里的播放器】——那只能控制"正在放什么"，而需求是
        * 播放自己放进去的歌。GSMTC 那套已整体移除。
        */
+      /**
+       * 添加歌曲弹窗：歌曲（必须）+ 封面（非必须）。
+       * 两个框都支持「拖入文件」与「点击选择」两条路径——拖入是主路径，
+       * 点击只是它的兜底，所以拖拽的视觉反馈必须明确（dragover 高亮）。
+       */
+      function createAddDialog(onSubmit) {
+        const back = document.createElement('div');
+        back.className = 'dsh-yoimiya-modal-back';
+        back.dataset.open = 'false';
+
+        const box = document.createElement('div');
+        box.className = 'dsh-yoimiya-modal';
+        box.setAttribute('role', 'dialog');
+        box.setAttribute('aria-modal', 'true');
+        box.setAttribute('aria-label', '添加歌曲');
+
+        const title = document.createElement('div');
+        title.className = 'dsh-yoimiya-modal-title';
+        title.textContent = '添加歌曲';
+
+        const state = { audio: null, image: null };
+
+        const mkZone = (kind, label, required, accept) => {
+          const zone = document.createElement('div');
+          zone.className = 'dsh-yoimiya-drop';
+          zone.dataset.zone = kind;
+          zone.tabIndex = 0;
+          zone.setAttribute('role', 'button');
+          zone.setAttribute('aria-label', label + (required ? '（必须）' : '（非必须）'));
+
+          const head = document.createElement('div');
+          head.className = 'dsh-yoimiya-drop-head';
+          const name = document.createElement('span');
+          name.className = 'dsh-yoimiya-drop-label';
+          name.textContent = label;
+          const badge = document.createElement('span');
+          badge.className = 'dsh-yoimiya-drop-badge';
+          badge.dataset.required = String(required);
+          badge.textContent = required ? '必须' : '非必须';
+          head.append(name, badge);
+
+          const hint = document.createElement('div');
+          hint.className = 'dsh-yoimiya-drop-hint';
+          hint.textContent = '拖入文件，或点击选择';
+
+          const picker = document.createElement('input');
+          picker.type = 'file';
+          picker.accept = accept;
+          picker.className = 'dsh-yoimiya-music-picker';
+
+          zone.append(head, hint, picker);
+
+          const accept0 = (file) => {
+            if (file === undefined || file === null) return;
+            state[kind] = file;
+            hint.textContent = file.name;
+            zone.dataset.filled = 'true';
+            sync();
+          };
+
+          const take = (list) => {
+            if (list === undefined || list === null || list.length === 0) return;
+            accept0(list[0]);
+          };
+
+          picker.addEventListener('change', () => {
+            take(picker.files);
+            picker.value = '';
+          });
+
+          zone.addEventListener('click', () => {
+            if (typeof picker.click === 'function') picker.click();
+          });
+          zone.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              if (typeof picker.click === 'function') picker.click();
+            }
+          });
+          zone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            zone.dataset.over = 'true';
+          });
+          zone.addEventListener('dragleave', () => {
+            zone.dataset.over = 'false';
+          });
+          zone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            zone.dataset.over = 'false';
+            take(e.dataTransfer === null || e.dataTransfer === undefined ? null : e.dataTransfer.files);
+          });
+
+          return { zone, reset: () => {
+            state[kind] = null;
+            hint.textContent = '拖入文件，或点击选择';
+            zone.dataset.filled = 'false';
+          } };
+        };
+
+        const audioZone = mkZone('audio', '歌曲', true, 'audio/*');
+        const imageZone = mkZone('image', '封面', false, 'image/*');
+
+        const actions = document.createElement('div');
+        actions.className = 'dsh-yoimiya-modal-actions';
+        const cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'dsh-yoimiya-modal-btn';
+        cancel.textContent = '取消';
+        const confirm = document.createElement('button');
+        confirm.type = 'button';
+        confirm.className = 'dsh-yoimiya-modal-btn dsh-yoimiya-modal-primary';
+        confirm.textContent = '添加';
+        actions.append(cancel, confirm);
+
+        const error = document.createElement('div');
+        error.className = 'dsh-yoimiya-modal-error';
+        error.hidden = true;
+
+        box.append(title, audioZone.zone, imageZone.zone, error, actions);
+
+        let busy = false;
+        const sync = () => {
+          confirm.disabled = state.audio === null || busy;
+          confirm.setAttribute('aria-disabled', String(confirm.disabled));
+        };
+
+        const close = () => {
+          back.dataset.open = 'false';
+          error.hidden = true;
+          error.textContent = '';
+        };
+        const open = () => {
+          audioZone.reset();
+          imageZone.reset();
+          busy = false;
+          confirm.textContent = '添加';
+          sync();
+          back.dataset.open = 'true';
+        };
+
+        cancel.addEventListener('click', close);
+        back.addEventListener('click', (e) => {
+          if (e.target === back) close();
+        });
+        box.addEventListener('click', (e) => e.stopPropagation());
+
+        confirm.addEventListener('click', () => {
+          if (state.audio === null || busy) return;
+          busy = true;
+          confirm.textContent = '上传中…';
+          sync();
+          Promise.resolve(onSubmit(state.audio, state.image)).then(
+            () => close(),
+            (err) => {
+              busy = false;
+              confirm.textContent = '添加';
+              sync();
+              error.hidden = false;
+              error.textContent = '添加失败：' + (err?.message ?? '未知原因');
+            },
+          );
+        });
+
+        back.append(box);
+        return {
+          node: back,
+          open,
+          close,
+          isOpen: () => back.dataset.open === 'true',
+        };
+      }
       function createMusicControls() {
         const wrap = document.createElement('div');
         wrap.className = 'dsh-yoimiya-music';
@@ -1195,14 +1527,9 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-dir { background: rgba(181, 80
         const addBtn = document.createElement('button');
         addBtn.type = 'button';
         addBtn.className = 'dsh-yoimiya-music-add';
-        addBtn.textContent = '添加歌曲 / 封面';
-        addBtn.title = '可一次多选：同名音频与图片会自动配对成封面';
-        const picker = document.createElement('input');
-        picker.type = 'file';
-        picker.accept = 'audio/*,image/*';
-        picker.multiple = true;
-        picker.className = 'dsh-yoimiya-music-picker';
-        addRow.append(addBtn, picker);
+        addBtn.textContent = '添加歌曲';
+        addBtn.title = '打开添加弹窗：歌曲必须，封面非必须';
+        addRow.append(addBtn);
 
         const listEl = document.createElement('div');
         listEl.className = 'dsh-yoimiya-music-list';
@@ -1340,34 +1667,32 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-dir { background: rgba(181, 80
           }
         };
 
-        addBtn.addEventListener('click', () => {
-          if (typeof picker.click === 'function') picker.click();
+        const upload = async (file, name) => {
+          try {
+            const res = await fetch('/yoimiya-music/upload?name=' + encodeURIComponent(name), {
+              method: 'POST',
+              body: file,
+            });
+            const r = await res.json();
+            return r.ok === true;
+          } catch {
+            return false;
+          }
+        };
+
+        // 添加走弹窗：歌曲（必须）+ 封面（非必须），两个框都支持拖入文件
+        const dialog = createAddDialog(async (audioFile, imageFile) => {
+          const stem = String(audioFile.name).replace(/\.[^.]+$/, '');
+          if (await upload(audioFile, audioFile.name) !== true) throw new Error('歌曲上传失败');
+          if (imageFile !== null) {
+            // 封面改名与歌曲同名——服务端按 basename 配对，名字不同就配不上
+            const ext = (String(imageFile.name).match(/\.[^.]+$/) ?? [''])[0];
+            await upload(imageFile, stem + ext);
+          }
+          await refresh();
         });
 
-        picker.addEventListener('change', () => {
-          const files = picker.files;
-          if (files === undefined || files === null || files.length === 0 || uploading) return;
-          uploading = true;
-          const total = files.length;
-          let done = 0;
-          addBtn.textContent = '上传中 0/' + total;
-          const one = (file) => fetch(
-            '/yoimiya-music/upload?name=' + encodeURIComponent(file.name),
-            { method: 'POST', body: file },
-          ).catch(() => null).then(() => {
-            done += 1;
-            addBtn.textContent = '上传中 ' + done + '/' + total;
-          });
-          const queue = [];
-          for (let i = 0; i < files.length; i++) queue.push(one(files[i]));
-          Promise.all(queue).then(() => {
-            uploading = false;
-            addBtn.textContent = '添加歌曲 / 封面';
-            picker.value = '';
-            return refresh();
-          });
-        });
-
+        addBtn.addEventListener('click', () => dialog.open());
         if (canPlay) {
           audio.addEventListener('ended', () => step(1));
           audio.addEventListener('timeupdate', () => {
@@ -1390,6 +1715,8 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-dir { background: rgba(181, 80
 
         return {
           node: wrap,
+          dialogNode: dialog.node,
+          closeDialog: () => dialog.close(),
           // 曲库只在打开面板时读一次；不轮询——列表是用户在面板里改的，
           // 没有理由每几秒去扫一遍磁盘
           startPolling: () => { void refresh(); },
@@ -1540,10 +1867,10 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-dir { background: rgba(181, 80
             buttons[k].setAttribute('aria-expanded', String(on));
           });
           if (open && key === 'music') music.startPolling();
-          else music.stopPolling();
+          else { music.stopPolling(); music.closeDialog(); }
         };
 
-        dock.append(fxPanel, musicPanel, btns);
+        dock.append(fxPanel, musicPanel, btns, music.dialogNode);
         dropStale('.dsh-yoimiya-dock');
         document.body.append(dock);
 

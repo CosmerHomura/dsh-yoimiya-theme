@@ -159,6 +159,9 @@ Windows 桌面端 `<DSH_HOME>` 默认是 `%APPDATA%\dsh-desktop\harness`。
 
 设置 → 插件 → 搜索 `yoimiya` → 安装。
 
+条目通过 [`awesome-dsh-plugin`](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)
+目录分发；还没上架时，用下面两种方式中的任意一种。
+
 ### 命令行
 
 ```bash

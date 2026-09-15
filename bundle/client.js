@@ -1242,7 +1242,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
       // 构建立即版本标记：面板上显示出来，这样"跑的是哪一版"一眼可判。
       // 起因是反复出现"改了但界面没变"——而客户端与 Host 半边的生效代价不同
       // （前者刷新、后者必须完全重启），没有标记就只能靠猜。
-      const BUILD_TAG = 'v25';
+      const BUILD_TAG = 'v26';
 
       const PARTICLE_KEY = 'dsh-yoimiya-particles-v1';
       const PARTICLE_DEFAULT = { on: true, speed: 1, density: 1, burst: 1 };
@@ -1633,8 +1633,14 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
 
         const open = (file) => new Promise((resolve) => {
           resolver = resolve;
+          // 【注意 typeof URL 是 'function'，不是 'object'】——URL 是一个类。
+          // 早先写成 typeof URL === 'object'，判断恒为 false，open() 永远立刻
+          // resolve(null)，于是裁切弹窗在真实浏览器里从未打开过，「加封面」
+          // 一直表现为没反应。这个 bug 还被测试桩掩盖了：桩里的 URL 传的是
+          // 普通对象，恰好满足那个错误写法（见 DESIGN.md §10.3）。
           const canImage = typeof Image === 'function';
-          const canUrl = typeof URL === 'object' && URL !== null && typeof URL.createObjectURL === 'function';
+          const canUrl = typeof URL !== 'undefined' && URL !== null
+            && typeof URL.createObjectURL === 'function';
           if (!canImage || !canUrl) {
             // 环境不支持就直接放行原文件，由调用方决定怎么办
             resolve(null);
@@ -1732,7 +1738,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-list {
           // open() 会立刻 resolve(null)，那与"用户点了不用封面"是两件事，
           // 必须能分辨，否则"点了没反应"会被误当成用户自己取消。
           isUsable: () => typeof Image === 'function'
-            && typeof URL === 'object' && URL !== null
+            && typeof URL !== 'undefined' && URL !== null
             && typeof URL.createObjectURL === 'function'
             && typeof document.createElement('canvas').getContext === 'function',
         };

@@ -97,9 +97,15 @@ const window = {
 class MutationObserver { observe() {} disconnect() {} }
 
 const src = readFileSync(join(root, 'bundle', 'client.js'), 'utf8');
+// URL 必须传【类】而不是普通对象：真实浏览器里 typeof URL 是 'function'。
+// 传普通对象会让 typeof URL === 'object' 这种错误写法蒙混过关——这个坑真踩过，
+// 当时裁切弹窗在真实环境里根本打不开，测试却全绿。
+class FakeURL {
+  static createObjectURL() { return 'blob:fake'; }
+  static revokeObjectURL() {}
+}
 new Function('window', 'document', 'MutationObserver', 'fetch', 'URL', 'Image', 'console', src)(
-  window, document, MutationObserver, fetchStub,
-  { createObjectURL: () => 'blob:fake', revokeObjectURL() {} }, FakeImage, console,
+  window, document, MutationObserver, fetchStub, FakeURL, FakeImage, console,
 );
 
 const ex = globalThis.__spec.factory(() => {});

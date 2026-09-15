@@ -998,6 +998,54 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-modal-primary {
   color: #B5502A;
   background: rgba(181, 80, 42, 0.14);
 }
+
+/* ── 封面裁切弹窗 ─────────────────────────────────────────────────── */
+.dsh-yoimiya-crop-back { z-index: 2147483002; }
+.dsh-yoimiya-crop-stage {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 11px;
+}
+.dsh-yoimiya-crop-canvas {
+  width: 224px;
+  height: 224px;
+  border-radius: 12px;
+  border: 1px solid rgba(224, 138, 60, 0.45);
+  background: rgba(10, 6, 16, 0.5);
+  /* 取景框本身就是这块画布，所见即所得：画布外的东西一律不在封面里 */
+  cursor: grab;
+  /* 触摸设备上必须关掉默认手势，否则拖动会被当成滚动 */
+  touch-action: none;
+  display: block;
+}
+.dsh-yoimiya-crop-canvas[data-dragging="true"] { cursor: grabbing; }
+.dsh-yoimiya-crop-canvas:focus-visible {
+  outline: 2px solid rgba(224, 138, 60, 0.6);
+  outline-offset: 3px;
+}
+.dsh-yoimiya-crop-zoom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.dsh-yoimiya-crop-range {
+  flex: 1;
+  min-width: 0;
+  accent-color: #E08A3C;
+  cursor: pointer;
+}
+.dsh-yoimiya-crop-hint {
+  margin-top: 7px;
+  font-size: 11px;
+  color: #8A7F72;
+}
+
+body:not([data-ds-dark-theme]) .dsh-yoimiya-crop-canvas {
+  border-color: rgba(181, 80, 42, 0.40);
+  background: rgba(90, 60, 30, 0.12);
+}
+body:not([data-ds-dark-theme]) .dsh-yoimiya-crop-range { accent-color: #B5502A; }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-crop-hint { color: #7C6A56; }
 `;
 
     // ══════════════════════════════════════════════════════════════
@@ -1333,7 +1381,245 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-modal-primary {
        * 两个框都支持「拖入文件」与「点击选择」两条路径——拖入是主路径，
        * 点击只是它的兜底，所以拖拽的视觉反馈必须明确（dragover 高亮）。
        */
-      function createAddDialog(onSubmit) {
+      /**
+       * 封面裁切弹窗。
+       *
+       * 载入图片后【必须】经过它：所有封面统一输出为 SIZE × SIZE 的方图，
+       * 否则列表缩略图会大小不一、取景位置各异。
+       *
+       * 用 canvas 当取景框而不是 CSS 变换：预览与输出走同一套变换参数
+       * （平移量、基准缩放、用户缩放三者完全相同），所见即所得；输出到
+       * 离屏 canvas 时只把整体乘上 SIZE/FRAME 的比例。
+       *
+       * open(file) 返回 Promise<Blob|null>：确认得到裁好的图，取消得到 null。
+       */
+      const COVER_SIZE = 512;
+      const CROP_FRAME = 224;
+
+      function createCropDialog() {
+        const back = document.createElement('div');
+        back.className = 'dsh-yoimiya-modal-back dsh-yoimiya-crop-back';
+        back.dataset.open = 'false';
+
+        const box = document.createElement('div');
+        box.className = 'dsh-yoimiya-modal';
+        box.setAttribute('role', 'dialog');
+        box.setAttribute('aria-modal', 'true');
+        box.setAttribute('aria-label', '裁切封面');
+
+        const title = document.createElement('div');
+        title.className = 'dsh-yoimiya-modal-title';
+        title.textContent = '裁切封面';
+
+        const stage = document.createElement('div');
+        stage.className = 'dsh-yoimiya-crop-stage';
+        const canvas = document.createElement('canvas');
+        canvas.className = 'dsh-yoimiya-crop-canvas';
+        canvas.width = CROP_FRAME;
+        canvas.height = CROP_FRAME;
+        canvas.tabIndex = 0;
+        canvas.setAttribute('role', 'img');
+        canvas.setAttribute('aria-label', '裁切取景框');
+        stage.append(canvas);
+
+        const zoomRow = document.createElement('div');
+        zoomRow.className = 'dsh-yoimiya-crop-zoom';
+        const zoomLabel = document.createElement('span');
+        zoomLabel.className = 'dsh-yoimiya-dock-label';
+        zoomLabel.textContent = '缩放';
+        const zoom = document.createElement('input');
+        zoom.type = 'range';
+        zoom.min = '100';
+        zoom.max = '400';
+        zoom.value = '100';
+        zoom.className = 'dsh-yoimiya-crop-range';
+        zoom.setAttribute('aria-label', '缩放');
+        zoomRow.append(zoomLabel, zoom);
+
+        const hint = document.createElement('div');
+        hint.className = 'dsh-yoimiya-crop-hint';
+        hint.textContent = '拖动调整位置 · 滚轮或滑块缩放 · 输出 ' + COVER_SIZE + '×' + COVER_SIZE;
+
+        const actions = document.createElement('div');
+        actions.className = 'dsh-yoimiya-modal-actions';
+        const cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'dsh-yoimiya-modal-btn';
+        cancel.textContent = '不用封面';
+        const confirm = document.createElement('button');
+        confirm.type = 'button';
+        confirm.className = 'dsh-yoimiya-modal-btn dsh-yoimiya-modal-primary';
+        confirm.textContent = '使用这张';
+        actions.append(cancel, confirm);
+
+        box.append(title, stage, zoomRow, hint, actions);
+        back.append(box);
+
+        let img = null;
+        let base = 1;
+        let zoomV = 1;
+        let ox = 0;
+        let oy = 0;
+        let url = null;
+        let resolver = null;
+        let dragging = false;
+        let lastX = 0;
+        let lastY = 0;
+
+        const clampPan = () => {
+          if (img === null) return;
+          const w = img.width * base * zoomV;
+          const h = img.height * base * zoomV;
+          const maxX = Math.max(0, (w - CROP_FRAME) / 2);
+          const maxY = Math.max(0, (h - CROP_FRAME) / 2);
+          ox = Math.min(maxX, Math.max(-maxX, ox));
+          oy = Math.min(maxY, Math.max(-maxY, oy));
+        };
+
+        const draw = () => {
+          if (img === null) return;
+          clampPan();
+          const g = typeof canvas.getContext === 'function' ? canvas.getContext('2d') : null;
+          if (g === null) return;
+          const dpr = Math.min(window.devicePixelRatio || 1, 2);
+          canvas.width = CROP_FRAME * dpr;
+          canvas.height = CROP_FRAME * dpr;
+          g.setTransform(dpr, 0, 0, dpr, 0, 0);
+          g.clearRect(0, 0, CROP_FRAME, CROP_FRAME);
+          const w = img.width * base * zoomV;
+          const h = img.height * base * zoomV;
+          g.drawImage(img, CROP_FRAME / 2 - w / 2 + ox, CROP_FRAME / 2 - h / 2 + oy, w, h);
+        };
+
+        // 输出与预览是同一套变换，只把整体乘上 SIZE/FRAME
+        const render = () => new Promise((resolve) => {
+          const out = document.createElement('canvas');
+          out.width = COVER_SIZE;
+          out.height = COVER_SIZE;
+          const g = typeof out.getContext === 'function' ? out.getContext('2d') : null;
+          if (g === null || typeof out.toBlob !== 'function') {
+            resolve(null);
+            return;
+          }
+          const k = COVER_SIZE / CROP_FRAME;
+          const w = img.width * base * zoomV * k;
+          const h = img.height * base * zoomV * k;
+          g.drawImage(img, COVER_SIZE / 2 - w / 2 + ox * k, COVER_SIZE / 2 - h / 2 + oy * k, w, h);
+          // WebP：体积远小于同质量 JPEG，且圆角缩略图不需要 alpha 之外的花样
+          out.toBlob((blob) => resolve(blob), 'image/webp', 0.9);
+        });
+
+        const finish = (blob) => {
+          back.dataset.open = 'false';
+          dragging = false;
+          img = null;
+          if (url !== null && typeof URL.revokeObjectURL === 'function') URL.revokeObjectURL(url);
+          url = null;
+          const resolve = resolver;
+          resolver = null;
+          if (resolve !== null) resolve(blob);
+        };
+
+        const open = (file) => new Promise((resolve) => {
+          resolver = resolve;
+          const canImage = typeof Image === 'function';
+          const canUrl = typeof URL === 'object' && URL !== null && typeof URL.createObjectURL === 'function';
+          if (!canImage || !canUrl) {
+            // 环境不支持就直接放行原文件，由调用方决定怎么办
+            resolve(null);
+            return;
+          }
+          url = URL.createObjectURL(file);
+          const image = new Image();
+          image.onload = () => {
+            img = image;
+            // 基准缩放取「铺满」：两个方向取较大者，保证不留空
+            base = Math.max(CROP_FRAME / image.width, CROP_FRAME / image.height);
+            zoomV = 1;
+            ox = 0;
+            oy = 0;
+            zoom.value = '100';
+            draw();
+            back.dataset.open = 'true';
+          };
+          image.onerror = () => finish(null);
+          image.src = url;
+        });
+
+        const onDown = (e) => {
+          if (img === null) return;
+          dragging = true;
+          lastX = e.clientX;
+          lastY = e.clientY;
+          canvas.dataset.dragging = 'true';
+          if (typeof canvas.setPointerCapture === 'function' && e.pointerId !== undefined) {
+            canvas.setPointerCapture(e.pointerId);
+          }
+        };
+        const onMove = (e) => {
+          if (!dragging || img === null) return;
+          ox += e.clientX - lastX;
+          oy += e.clientY - lastY;
+          lastX = e.clientX;
+          lastY = e.clientY;
+          draw();
+        };
+        const onUp = () => {
+          dragging = false;
+          canvas.dataset.dragging = 'false';
+        };
+
+        canvas.addEventListener('pointerdown', onDown);
+        canvas.addEventListener('pointermove', onMove);
+        canvas.addEventListener('pointerup', onUp);
+        canvas.addEventListener('pointercancel', onUp);
+        canvas.addEventListener('wheel', (e) => {
+          if (img === null) return;
+          e.preventDefault();
+          const next = Math.min(400, Math.max(100, Number(zoom.value) + (e.deltaY < 0 ? 10 : -10)));
+          zoom.value = String(next);
+          zoomV = next / 100;
+          draw();
+        }, { passive: false });
+
+        zoom.addEventListener('input', () => {
+          zoomV = Number(zoom.value) / 100;
+          draw();
+        });
+
+        // 键盘也能平移，避免只能靠鼠标
+        canvas.addEventListener('keydown', (e) => {
+          const step = e.shiftKey ? 16 : 4;
+          if (e.key === 'ArrowLeft') ox -= step;
+          else if (e.key === 'ArrowRight') ox += step;
+          else if (e.key === 'ArrowUp') oy -= step;
+          else if (e.key === 'ArrowDown') oy += step;
+          else return;
+          e.preventDefault();
+          draw();
+        });
+
+        cancel.addEventListener('click', () => finish(null));
+        confirm.addEventListener('click', () => {
+          if (img === null) {
+            finish(null);
+            return;
+          }
+          confirm.disabled = true;
+          void render().then((blob) => {
+            confirm.disabled = false;
+            finish(blob);
+          });
+        });
+
+        return {
+          node: back,
+          open,
+          close: () => finish(null),
+          isOpen: () => back.dataset.open === 'true',
+        };
+      }
+      function createAddDialog(crop, onSubmit) {
         const back = document.createElement('div');
         back.className = 'dsh-yoimiya-modal-back';
         back.dataset.open = 'false';
@@ -1380,10 +1666,31 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-modal-primary {
 
           zone.append(head, hint, picker);
 
-          const accept0 = (file) => {
+          const clear = () => {
+            state[kind] = null;
+            hint.textContent = '拖入文件，或点击选择';
+            zone.dataset.filled = 'false';
+            sync();
+          };
+
+          const accept0 = async (file) => {
             if (file === undefined || file === null) return;
-            state[kind] = file;
-            hint.textContent = file.name;
+            if (kind !== 'image') {
+              state[kind] = file;
+              hint.textContent = file.name;
+              zone.dataset.filled = 'true';
+              sync();
+              return;
+            }
+            // 封面必须经过裁切：所有封面输出统一的 COVER_SIZE 方图，否则列表
+            // 缩略图会大小不一、取景各异。裁切结果是一张 WebP Blob，没有文件名。
+            const cropped = await crop.open(file);
+            if (cropped === null) {
+              clear();
+              return;
+            }
+            state.image = cropped;
+            hint.textContent = file.name + ' · 已裁 ' + COVER_SIZE + '×' + COVER_SIZE;
             zone.dataset.filled = 'true';
             sync();
           };
@@ -1698,13 +2005,16 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-modal-primary {
         };
 
         // 添加走弹窗：歌曲（必须）+ 封面（非必须），两个框都支持拖入文件
-        const dialog = createAddDialog(async (audioFile, imageFile) => {
+        const crop = createCropDialog();
+
+        const dialog = createAddDialog(crop, async (audioFile, imageFile) => {
           const stem = String(audioFile.name).replace(/\.[^.]+$/, '');
           if (await upload(audioFile, audioFile.name) !== true) throw new Error('歌曲上传失败');
           if (imageFile !== null) {
-            // 封面改名与歌曲同名——服务端按 basename 配对，名字不同就配不上
-            const ext = (String(imageFile.name).match(/\.[^.]+$/) ?? [''])[0];
-            await upload(imageFile, stem + ext);
+            // 封面改名与歌曲同名——服务端按 basename 配对，名字不同就配不上。
+            // 扩展名固定 .webp：裁切器输出的就是 WebP，写成别的格式服务端会
+            // 按错误的 MIME 提供，缩略图可能显示不出来。
+            await upload(imageFile, stem + '.webp');
           }
           await refresh();
         });
@@ -1733,7 +2043,8 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-modal-primary {
         return {
           node: wrap,
           dialogNode: dialog.node,
-          closeDialog: () => dialog.close(),
+          cropNode: crop.node,
+          closeDialog: () => { dialog.close(); crop.close(); },
           isDialogOpen: () => dialog.isOpen(),
           // 曲库只在打开面板时读一次；不轮询——列表是用户在面板里改的，
           // 没有理由每几秒去扫一遍磁盘
@@ -1888,7 +2199,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-modal-primary {
           else { music.stopPolling(); music.closeDialog(); }
         };
 
-        dock.append(fxPanel, musicPanel, btns, music.dialogNode);
+        dock.append(fxPanel, musicPanel, btns, music.dialogNode, music.cropNode);
         dropStale('.dsh-yoimiya-dock');
         document.body.append(dock);
 

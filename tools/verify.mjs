@@ -25,78 +25,114 @@ const fail = (msg) => failures.push(msg);
 // 桩元素要尽量贴近真实 DOM：主题会写 className/dataset/style、挂子节点、
 // 注册监听、取 2D 上下文。缺任何一个字段都会让 apply() 在桩里抛错，把真实
 // 可用的代码误判为不合格。
-// getContext 返回 null 是有意的：粒子层在桩里应当走「环境不支持」分支，
-// 于是它的 canvas 逻辑不必被桩模拟，同时又验证了那条降级路径不会抛错。
-const fakeEl = () => ({
-  id: '',
-  className: '',
-  textContent: '',
-  innerHTML: '',
-  style: {},
-  dataset: {},
-  setAttribute() {},
-  removeAttribute() {},
-  remove() {},
-  append() {},
-  appendChild() {},
-  addEventListener() {},
-  removeEventListener() {},
-  getContext() {
-    return null;
-  },
-});
+//
+// 两套桩，用途不同：
+//   canvas2d: false（第 1 节用）getContext 返回 null。粒子层在这里走
+//     「环境不支持」分支，于是画布逻辑不必被模拟，同时又验证那条降级路径不抛错。
+//   canvas2d: true（第 8 节用）提供可用的 2D 上下文，用来验证粒子层【真的启用】。
+//     只有 null 桩的话，createParticles 里任何真实错误都会被它的 try/catch 吞掉
+//     只留一条 console.warn，整套检查照样全绿——这个坑真踩过。
+function makeEnv({ canvas2d = false } = {}) {
+  const mounted = [];
+  const warnings = [];
+  const fake2d = () => ({
+    setTransform() {}, clearRect() {}, fillRect() {}, beginPath() {},
+    moveTo() {}, arc() {}, fill() {}, drawImage() {},
+    fillStyle: '', globalCompositeOperation: '', globalAlpha: 1,
+  });
+  const fakeEl = () => ({
+    id: '',
+    className: '',
+    textContent: '',
+    innerHTML: '',
+    style: {},
+    dataset: {},
+    setAttribute() {},
+    removeAttribute() {},
+    remove() {},
+    append() {},
+    appendChild() {},
+    addEventListener() {},
+    removeEventListener() {},
+    getContext: canvas2d ? fake2d : () => null,
+  });
 
-let captured = null;
-// window 也要贴近真实：主题会挂 resize / focus 监听，粒子层会读尺寸与
-// devicePixelRatio、取 rAF。少任何一个都会让 apply() 在桩里抛错，把真实
-// 可用的代码误判为不合格。
-const window = {
-  __ModuleLoader__: {
-    load(spec) {
-      captured = spec;
+  let captured = null;
+  const window = {
+    __ModuleLoader__: {
+      load(spec) {
+        captured = spec;
+      },
     },
-  },
-  innerWidth: 1440,
-  innerHeight: 900,
-  devicePixelRatio: 1,
-  addEventListener() {},
-  removeEventListener() {},
-  requestAnimationFrame() {
-    return 1;
-  },
-  cancelAnimationFrame() {},
-  setTimeout() {
-    return 1;
-  },
-  clearTimeout() {},
-  setInterval() {
-    return 1;
-  },
-  clearInterval() {},
-  performance: { now: () => 0 },
-  matchMedia: () => ({ matches: false }),
-  localStorage: {
-    getItem: () => null,
-    setItem() {},
-  },
-};
-const document = {
-  getElementById: () => null,
-  createElement: fakeEl,
-  head: { append() {} },
-  body: { append() {}, appendChild() {} },
-  documentElement: { setAttribute() {}, removeAttribute() {} },
-  querySelectorAll: () => [],
-  addEventListener() {},
-  removeEventListener() {},
-};
+    innerWidth: 1440,
+    innerHeight: 900,
+    devicePixelRatio: 1,
+    addEventListener() {},
+    removeEventListener() {},
+    requestAnimationFrame() {
+      return 1;
+    },
+    cancelAnimationFrame() {},
+    setTimeout() {
+      return 1;
+    },
+    clearTimeout() {},
+    setInterval() {
+      return 1;
+    },
+    clearInterval() {},
+    performance: { now: () => 0 },
+    matchMedia: () => ({ matches: false }),
+    localStorage: {
+      getItem: () => null,
+      setItem() {},
+    },
+  };
+  const document = {
+    getElementById: () => null,
+    createElement: fakeEl,
+    head: { append() {} },
+    body: {
+      append(...nodes) {
+        mounted.push(...nodes);
+      },
+      appendChild(node) {
+        mounted.push(node);
+      },
+    },
+    documentElement: { setAttribute() {}, removeAttribute() {} },
+    querySelectorAll: () => [],
+    addEventListener() {},
+    removeEventListener() {},
+    hidden: false,
+  };
+  return {
+    window,
+    document,
+    mounted,
+    warnings,
+    get captured() {
+      return captured;
+    },
+  };
+}
 class MutationObserver {
   observe() {}
   disconnect() {}
 }
 
 const src = readFileSync(join(root, 'bundle', 'client.js'), 'utf8');
-new Function('window', 'document', 'MutationObserver', src)(window, document, MutationObserver);
+const env = makeEnv();
+new Function('window', 'document', 'MutationObserver', src)(env.window, env.document, MutationObserver);
+
+const window = env.window;
+const document = env.document;
+// 必须先把原始 createElement 抓在手里：下面为了拦截样式表会把
+// document.createElement 换成一个调用 fakeEl() 的包装，而 fakeEl 如果还去解析
+// document.createElement，就会变成自我递归（栈溢出）。
+const rawCreateElement = env.document.createElement;
+const fakeEl = () => rawCreateElement('div');
+const captured = env.captured;
 
 if (captured === null) {
   fail('bundle/client.js 未调用 window.__ModuleLoader__.load');
@@ -431,6 +467,56 @@ console.log(`标识骨架：mark.svg ${skelDark.length} 字符 / mark-day.svg ${
 if (skelDark !== skelLight) {
   const at = [...skelDark].findIndex((c, i) => c !== skelLight[i]);
   fail(`两档标识的几何不一致（自第 ${at} 个字符起）：mark.svg 与 mark-day.svg 必须只差颜色`);
+}
+
+// ── 8 · 粒子层必须真的启用，不能静默降级 ────────────────────────
+// createParticles() 整个包在 try/catch 里，失败只留一条 console.warn，主题照常
+// 工作。这是有意的——粒子是纯装饰，不该拖垮主题——但代价是【那里面的任何真实
+// 错误都不会让检查变红】。
+//
+// 真踩过：`let ratio` 被写在了 resize() 之下，而 resize() 在定义处就立即调用，
+// 一撞 TDZ 整个粒子层失效。当时 verify 与封面回归测试都是绿的，因为第 1 节那个
+// 桩的 getContext 返回 null，createParticles 在那里就提前 return 了。
+//
+// 所以这里用一个具备 2D 上下文的桩再跑一遍 apply()，要求两件事同时成立：
+//   · 全程没有任何 console.warn / console.error
+//   · 粒子画布确实被挂到了 body 上
+{
+  const probe = makeEnv({ canvas2d: true });
+  const realWarn = console.warn;
+  const realError = console.error;
+  console.warn = (...args) => probe.warnings.push(`warn: ${args.join(' ')}`);
+  console.error = (...args) => probe.warnings.push(`error: ${args.join(' ')}`);
+  try {
+    new Function('window', 'document', 'MutationObserver', src)(
+      probe.window,
+      probe.document,
+      MutationObserver,
+    );
+    probe.captured.factory(() => {}).apply({
+      get: (name) => (name === 'theme' ? { overrideTokens: () => () => {} } : undefined),
+      effect: (fn) => fn,
+    });
+  } catch (error) {
+    probe.warnings.push(`apply() 抛错：${error.message}`);
+  } finally {
+    console.warn = realWarn;
+    console.error = realError;
+  }
+
+  const particleCanvas = probe.mounted.some(
+    (node) => node !== null && typeof node === 'object' && node.className === 'dsh-yoimiya-particles',
+  );
+  console.log('');
+  console.log(
+    `粒子层实测：画布已挂载 ${particleCanvas ? '是' : '否'}，告警 ${probe.warnings.length} 条`,
+  );
+  for (const w of probe.warnings) {
+    fail(`粒子层启用时有告警（说明它被静默跳过了）：${w}`);
+  }
+  if (!particleCanvas) {
+    fail('粒子层没有挂载画布：在具备 2D 上下文的环境里 createParticles() 也应成功');
+  }
 }
 
 report();

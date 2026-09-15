@@ -583,6 +583,14 @@ body:not([data-ds-dark-theme]) div[class*="codeBlock"] pre {
 }
 .dsh-yoimiya-dock-row:first-child { margin-top: 0; }
 .dsh-yoimiya-dock-label { color: #B9AC9C; font-size: 11px; letter-spacing: .05em; }
+/* 开销读数：沿用 label 的次要文本色（已过对比度校验），等宽数字免得跳动时宽度抖 */
+.dsh-yoimiya-dock-stat {
+  color: #B9AC9C;
+  font-size: 10px;
+  letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
 
 .dsh-yoimiya-seg {
   display: inline-flex;
@@ -635,6 +643,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-panel {
   box-shadow: 0 14px 34px rgba(90, 60, 30, 0.22);
 }
 body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-label { color: #6B5A4A; }
+body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-stat { color: #6B5A4A; }
 body:not([data-ds-dark-theme]) .dsh-yoimiya-seg { border-color: rgba(181, 80, 42, 0.28); }
 body:not([data-ds-dark-theme]) .dsh-yoimiya-seg button,
 body:not([data-ds-dark-theme]) .dsh-yoimiya-dock-toggle { color: #6B5A4A; }
@@ -1216,20 +1225,59 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
      * 所以对 body 缺失做防御：先补一次，等 DOMContentLoaded 再接观察器。
      */
     function patchPlaceholders() {
+      /** 上一次改写命中的元素。绝大多数变更都发生在同一个输入框里。 */
+      let cached = null;
+
+      const rewrite = (el) => {
+        const current = el.textContent;
+        if (!current) return;
+        const next = rewritePlaceholder(current);
+        if (next !== null) el.textContent = next;
+      };
+
       const walk = () => {
+        // 快路径：目标还在原地就直接改写，省掉一次全文档查询。
+        // 这个观察器挂在 document.body 上、characterData 也开着，所以它会被
+        // 【每一次输入、每一个流式 token、以及本插件自己的每次 DOM 写入】触发。
+        // 每次都跑一遍全文档 querySelectorAll（该选择器没有 id/class，用不上
+        // Blink 的快路径，代价随会话变长而增长）是不必要的——热路径下目标就是
+        // 同一个元素。切换会话时输入框被重建，isConnected 变 false，自然回落
+        // 到全量查询。
+        // isConnected 用 === true 判断：桩对象没有这个属性，届时走全量查询。
+        if (cached !== null && cached.isConnected === true) {
+          rewrite(cached);
+          return;
+        }
+        cached = null;
+        let found = null;
+        let count = 0;
         document.querySelectorAll('[data-composer-placeholder]').forEach((el) => {
-          const current = el.textContent;
-          if (!current) return;
-          const next = rewritePlaceholder(current);
-          if (next !== null) el.textContent = next;
+          count += 1;
+          found = el;
+          rewrite(el);
+        });
+        // 只在确实只有一个时才缓存，否则会漏掉其余的
+        if (count === 1) cached = found;
+      };
+
+      // 变更常常成串到达（一次输入、一段流式输出），合并到下一帧只扫一次。
+      // rAF 在绘制前执行，所以文案不会晚于本帧出现，观感无差别。
+      let queued = false;
+      const schedule = () => {
+        if (queued) return;
+        queued = true;
+        window.requestAnimationFrame(() => {
+          queued = false;
+          walk();
         });
       };
+
       let observer = null;
       const start = () => {
         if (observer !== null) return;
         walk();
         if (!document.body) return;
-        observer = new MutationObserver(walk);
+        observer = new MutationObserver(schedule);
         observer.observe(document.body, { subtree: true, childList: true, characterData: true });
       };
       start();
@@ -1239,6 +1287,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
       return () => {
         observer?.disconnect();
         observer = null;
+        cached = null;
       };
     }
 
@@ -1355,16 +1404,37 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
           const g = typeof canvas.getContext === 'function' ? canvas.getContext('2d') : null;
           if (g === null) return null; // 桩环境或没有 2D 上下文
 
-          const RATIO = Math.min(window.devicePixelRatio || 1, 1.5);
+          // 后备存储按设备像素比放大，但给总像素数封顶。
+          // 粒子层每帧都要用 destination-out 铺满一次整块画布，像素数直接决定
+          // 这步的成本：4K 屏按 1.5 倍是 8.3M 像素/帧。粒子是纯装饰，退一点
+          // 分辨率看不出来，却能挡住"别人机器上白烧电"。窗口尺寸变了要重算。
+          const MAX_CANVAS_PIXELS = 2.2e6;
+          const ratioFor = (w, h) => {
+            const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+            const px = w * h * dpr * dpr;
+            return px > MAX_CANVAS_PIXELS ? dpr * Math.sqrt(MAX_CANVAS_PIXELS / px) : dpr;
+          };
           let W = 0;
           let H = 0;
+          /** 当前后备存储倍率，随窗口尺寸封顶重算。必须在 resize() 之前声明——
+              它下面紧接着就被调用，声明晚了会撞 TDZ。 */
+          let ratio = 1;
 
+          // 只在像素尺寸真的变了时才重设 canvas.width/height：赋值会重建整个
+          // 后备存储，拖窗口时每个 resize 事件都做一次代价很高。
           const resize = () => {
-            W = window.innerWidth;
-            H = window.innerHeight;
-            canvas.width = Math.max(1, Math.round(W * RATIO));
-            canvas.height = Math.max(1, Math.round(H * RATIO));
-            g.setTransform(RATIO, 0, 0, RATIO, 0, 0);
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            ratio = ratioFor(w, h);
+            const pw = Math.max(1, Math.round(w * ratio));
+            const ph = Math.max(1, Math.round(h * ratio));
+            W = w;
+            H = h;
+            if (pw === canvas.width && ph === canvas.height) return;
+            canvas.width = pw;
+            canvas.height = ph;
+            // 赋值 width/height 会重置全部上下文状态（含 transform），故在其后设置
+            g.setTransform(ratio, 0, 0, ratio, 0, 0);
           };
           resize();
 
@@ -1376,6 +1446,28 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
             [246, 214, 160], // 淡金
           ];
 
+          const TAU = 6.2832;
+
+          // 亮度档数。火星的【透明度与半径都由同一个参数 (1-t) 决定】，所以只
+          // 需要给这一个参数分档，两者就自动一致，不会出现"变亮了但没变大"。
+          // 24 档时透明度步进 0.0375、半径步进 0.054px，肉眼不可分辨。
+          const ALPHA_STEPS = 24;
+
+          // 颜色字符串预生成成表。
+          // 原来是在绘制的内层循环里拼 'rgba(...)' + toFixed(3)，上限 900 个
+          // 粒子就是每帧 900 次字符串分配——纯粹喂给 GC。查表后每帧零分配。
+          const COLORS = HUES.map((h) => {
+            const row = [];
+            for (let i = 0; i <= ALPHA_STEPS; i++) {
+              row.push('rgba(' + h[0] + ',' + h[1] + ',' + h[2] + ',' + ((i / ALPHA_STEPS) * 0.9).toFixed(3) + ')');
+            }
+            return row;
+          });
+          const ROCKET_COLORS = HUES.map((h) => 'rgba(' + h[0] + ',' + h[1] + ',' + h[2] + ',0.950)');
+
+          // 按 (颜色, 亮度档) 分组用的桶。每帧只清 length，不重新分配。
+          const buckets = HUES.map(() => Array.from({ length: ALPHA_STEPS + 1 }, () => []));
+
           const rockets = [];
           const sparks = [];
           const MAX_SPARKS = 900;
@@ -1385,6 +1477,13 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
           let spawnAcc = 0;
           let raf = 0;
           let last = 0;
+          // 帧率统计。要的是"这一层到底有多贵"，所以：
+          //   · 用【未裁剪】的真实间隔算帧率——dt 有 0.05 上限，拿它算会把卡顿
+          //     算成"还行"，正好掩盖要测的东西；
+          //   · 只统计 step 真正在跑的帧，停掉时读数归零，不会留一个好看的假数。
+          let frames = 0;
+          let fpsSince = 0;
+          let fps = 0;
 
           // 速度档作用于【升起】：先随机一个目标高度，再由「升多久」反推上升
           // 速度。早先的写法把速度档乘在 dur 上、vy 却是独立随机的，结果是
@@ -1402,7 +1501,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
               vy: -riseH / dur,
               life: 0,
               dur,
-              hue: HUES[k],
+              hue: k,   // 存下标而不是颜色数组本身，绘制时直接查表
             });
           };
 
@@ -1426,17 +1525,25 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
             if (sparks.length > MAX_SPARKS) sparks.splice(0, sparks.length - MAX_SPARKS);
           };
 
-          const paint = (p, alpha, rad) => {
-            const h = p.hue;
-            g.fillStyle = 'rgba(' + h[0] + ',' + h[1] + ',' + h[2] + ',' + alpha.toFixed(3) + ')';
+          // 引线同时只有个位数，逐个画就够；颜色查表，不拼字符串。
+          const paintRocket = (r) => {
+            g.fillStyle = ROCKET_COLORS[r.hue];
             g.beginPath();
-            g.arc(p.x, p.y, rad, 0, 6.2832);
+            g.arc(r.x, r.y, 1.7, 0, TAU);
             g.fill();
           };
 
           const step = (now) => {
-            const dt = Math.min((now - last) / 1000, 0.05);
+            const raw = now - last;
+            const dt = Math.min(raw / 1000, 0.05);
             last = now;
+
+            frames++;
+            if (now - fpsSince >= 500) {
+              fps = Math.round((frames * 1000) / (now - fpsSince));
+              frames = 0;
+              fpsSince = now;
+            }
 
             // 用 destination-out 淡出上一帧，得到自然拖尾；画布其余部分保持透明
             g.globalCompositeOperation = 'destination-out';
@@ -1457,17 +1564,27 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
               r.y += r.vy * dt;
               if (r.life >= r.dur) {
                 burst(r);
-                rockets.splice(i, 1);
+                // 交换删除而不是 splice：splice 要搬动后面所有元素，是 O(n)。
+                // 倒序遍历时，被换到 i 上的那个末尾元素本帧已经处理过，跳过它安全。
+                rockets[i] = rockets[rockets.length - 1];
+                rockets.pop();
                 continue;
               }
-              paint(r, 0.95, 1.7);
+              paintRocket(r);
             }
 
+            // 先按 (颜色, 亮度档) 归桶，再逐桶一次性 fill。
+            // 原先是每个火星各自赋 fillStyle + beginPath/arc/fill，900 个粒子就是
+            // 每帧 900 次独立绘制与 900 次字符串拼接。归桶后绘制次数降到
+            // 「颜色数 × 档数」这个量级，像素结果不变。
+            // 绘制顺序变了（原来是数组序）不影响观感：合成模式是 lighter，
+            // 加法可交换。
             for (let i = sparks.length - 1; i >= 0; i--) {
               const p = sparks[i];
               p.life += dt;
               if (p.life >= p.dur) {
-                sparks.splice(i, 1);
+                sparks[i] = sparks[sparks.length - 1];
+                sparks.pop();
                 continue;
               }
               p.vy += H * 0.15 * dt;          // 重力
@@ -1475,8 +1592,34 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
               p.vy *= 1 - 1.5 * dt;
               p.x += p.vx * dt;
               p.y += p.vy * dt;
-              const t = p.life / p.dur;
-              paint(p, (1 - t) * 0.9, p.rad * (0.55 + (1 - t)));
+              // 越接近熄灭档位越低；k 同时决定透明度与半径，见 ALPHA_STEPS 注释
+              const k = ALPHA_STEPS - Math.round((p.life / p.dur) * ALPHA_STEPS);
+              buckets[p.hue][k].push(p);
+            }
+
+            // k=0 对应透明度 0，不必绘制，但【必须照样清空】——否则这一桶会跨帧
+            // 越积越多，是内存与耗时的双重泄漏。
+            for (let k = ALPHA_STEPS; k >= 0; k--) {
+              const scale = 0.55 + k / ALPHA_STEPS;
+              for (let h = 0; h < HUES.length; h++) {
+                const group = buckets[h][k];
+                const n = group.length;
+                if (n > 0) {
+                  if (k > 0) {
+                    g.fillStyle = COLORS[h][k];
+                    g.beginPath();
+                    for (let j = 0; j < n; j++) {
+                      const p = group[j];
+                      const r = p.rad * scale;
+                      // arc 在已有子路径时会先补一条直线连过去，必须先 moveTo 断开
+                      g.moveTo(p.x + r, p.y);
+                      g.arc(p.x, p.y, r, 0, TAU);
+                    }
+                    g.fill();
+                  }
+                  group.length = 0;
+                }
+              }
             }
 
             raf = window.requestAnimationFrame(step);
@@ -1484,7 +1627,14 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
 
           const start = () => {
             if (raf !== 0) return;
+            // 画布已被移出文档就绝不能再起循环。这是防御性的第二道闸：只要漏掉
+            // 一次监听器摘除，这里能保证不会留下"没有人能停"的僵尸 rAF。
+            // 用 === false 而不是取反：桩对象没有 isConnected（undefined），
+            // 取反会把桩环境一并挡掉。
+            if (canvas.isConnected === false) return;
             last = window.performance.now();
+            fpsSince = last;
+            frames = 0;
             raf = window.requestAnimationFrame(step);
           };
           const stop = () => {
@@ -1493,6 +1643,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
             raf = 0;
             rockets.length = 0;
             sparks.length = 0;
+            fps = 0;
             g.clearRect(0, 0, W, H);
           };
 
@@ -1501,6 +1652,14 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
             start,
             stop,
             resize,
+            /** 面板上的开销读数：粒子数、实测帧率、画布像素数。 */
+            stats: () => ({
+              sparks: sparks.length,
+              rockets: rockets.length,
+              fps,
+              pixels: canvas.width * canvas.height,
+              ratio,
+            }),
             setPrefs: (prefs) => {
               speed = prefs.speed;
               density = prefs.density;
@@ -2812,7 +2971,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
        * 音乐是独立按钮而不是塞进烟花面板——两件事没有关系，塞在一起只会让人
        * 找不到。
        */
-      function createDock(prefs, onChange, particleControls) {
+      function createDock(prefs, onChange, getStats) {
         const dock = document.createElement('div');
         dock.className = 'dsh-yoimiya-dock';
 
@@ -2855,7 +3014,9 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
 
         // ── 烟花面板 ──
         const fxPanel = mkPanel('烟花效果');
-        if (particleControls) {
+        /** 面板收起时不做任何事；打开时才被换成真正的读取函数。 */
+        let showStats = () => {};
+        if (getStats) {
           const onRow = mkRow('烟花');
           const onBtn = document.createElement('button');
           onBtn.type = 'button';
@@ -2888,7 +3049,22 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
             onChange(prefs);
           }));
 
-          fxPanel.append(onRow, speedRow, densityRow, burstRow);
+          // 开销读数。存在的意义是让"粒子层到底有多贵"有数可依而不是靠猜：
+          // 帧率、火星数、画布像素数都摆出来，调档位时能直接看到代价。
+          // 注意帧率是【未裁剪的真实间隔】算出来的，卡顿不会被 dt 上限掩盖。
+          const statRow = mkRow('开销');
+          const statText = document.createElement('span');
+          statText.className = 'dsh-yoimiya-dock-stat';
+          statRow.append(statText);
+          showStats = () => {
+            const s = getStats();
+            const megapixels = (s.pixels / 1e6).toFixed(1) + 'M';
+            statText.textContent = s.fps > 0
+              ? s.fps + ' fps · ' + s.sparks + ' 火星 · 画布 ' + megapixels
+              : '已暂停 · 画布 ' + megapixels;
+          };
+
+          fxPanel.append(onRow, speedRow, densityRow, burstRow, statRow);
         } else {
           const note = document.createElement('div');
           note.className = 'dsh-yoimiya-dock-note';
@@ -2928,6 +3104,14 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
           music: mkBtn('music', ICON_MUSIC, '音乐'),
         };
 
+        // 开销读数只在面板打开时刷新：收起时没必要每隔半秒去动一次 DOM。
+        let statTimer = 0;
+        const stopStats = () => {
+          if (statTimer === 0) return;
+          window.clearInterval(statTimer);
+          statTimer = 0;
+        };
+
         const setOpen = (key, open) => {
           Object.keys(panels).forEach((k) => {
             const on = k === key && open;
@@ -2936,6 +3120,12 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
           });
           if (open && key === 'music') music.startPolling();
           else { music.stopPolling(); music.closeDialog(); }
+
+          stopStats();
+          if (open && key === 'fx') {
+            showStats();
+            statTimer = window.setInterval(showStats, 500);
+          }
         };
 
         dock.append(fxPanel, musicPanel, btns, music.dialogNode, music.cropNode, music.coverNode);
@@ -2951,6 +3141,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
         document.addEventListener('keydown', onEsc);
 
         return () => {
+          stopStats();
           music.stopPolling();
           document.removeEventListener('keydown', onEsc);
           dock.remove();
@@ -2960,7 +3151,7 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
       const particlePrefs = readParticlePrefs();
       const scrimEl = mountScrim();
       const particles = createParticles();
-      let disposeResize = null;
+      let disposeParticles = null;
 
       if (particles !== null) {
         dropStale('.dsh-yoimiya-particles');
@@ -2968,12 +3159,19 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
         particles.setPrefs(particlePrefs);
         if (particlePrefs.on) particles.start();
 
+        // resize 在拖动窗口时按刷新率触发（一帧里可能来好几个），而 resize()
+        // 要重建整块后备存储。合并到下一帧，一次拖动只做一次。
+        let resizeQueued = false;
         const onResize = () => {
-          particles.resize();
-          if (particlePrefs.on) particles.start();
+          if (resizeQueued) return;
+          resizeQueued = true;
+          window.requestAnimationFrame(() => {
+            resizeQueued = false;
+            particles.resize();
+            if (particlePrefs.on) particles.start();
+          });
         };
         window.addEventListener('resize', onResize);
-        disposeResize = () => window.removeEventListener('resize', onResize);
 
         // 页面不可见时停掉，别在后台空转烧电
         const onVisibility = () => {
@@ -2981,6 +3179,18 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
           else if (particlePrefs.on) particles.start();
         };
         document.addEventListener('visibilitychange', onVisibility);
+
+        // 这两个监听器都必须拆掉。漏掉 visibilitychange 的后果不是"少停一次"：
+        // 那个闭包还攥着旧实例的 start()，下次切回前台会重新点亮一条画向
+        // 【已被移除的画布】的 rAF 循环，而再没有任何句柄能停它——重载一次多
+        // 一条，直到重启应用。现在有 start() 里的 isConnected 闸兜底，但监听器
+        // 本身也该摘干净。
+        disposeParticles = () => {
+          window.removeEventListener('resize', onResize);
+          document.removeEventListener('visibilitychange', onVisibility);
+          particles.stop();
+          particles.canvas.remove();
+        };
       }
 
       // 控件坞始终挂载：音乐控制不依赖粒子层，粒子不可用时只是少一个面板
@@ -2990,15 +3200,11 @@ body:not([data-ds-dark-theme]) .dsh-yoimiya-music-art[data-cover="false"] {
         particles.setPrefs(next);
         if (next.on) particles.start();
         else particles.stop();
-      }, particles !== null);
+      }, particles === null ? null : () => particles.stats());
 
       ctx.effect(() => () => {
         if (typeof disposeDock === 'function') disposeDock();
-        if (disposeResize !== null) disposeResize();
-        if (particles !== null) {
-          particles.stop();
-          particles.canvas.remove();
-        }
+        if (disposeParticles !== null) disposeParticles();
         scrimEl.remove();
       }, 'yoimiya-theme: dock');
 

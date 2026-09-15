@@ -353,11 +353,12 @@ body:not([data-ds-dark-theme])::before {
 
 /* ── 2 · 会话流：抬到稳定亮度的阅读卡上 ──────────────────────────
    [data-chat-flow] 是 ChatView 的消息列容器（整段对话，非单条）。
-   只叠一层 backdrop-filter，不做多层，避免视觉噪声与合成开销。 */
+   用半透明底面 + 描边做出玻璃质感。这里【刻意不用 backdrop-filter】：
+   它会为元素创建固定定位后代的包含块，DSH 的设置面板等浮层一旦挂在这棵
+   子树里就会以本元素为参照定位（实测：设置面板跑到侧边栏里展开）。
+   半透明底面本身已足够，模糊只是锦上添花，不值得用定位正确性去换。 */
 [data-chat-flow] {
   background: rgba(20,17,28,0.60);
-  backdrop-filter: blur(10px) saturate(1.15);
-  -webkit-backdrop-filter: blur(10px) saturate(1.15);
   border: 1px solid rgba(240,200,140,0.10);
   border-radius: 18px;
   padding: 14px 16px 22px;
@@ -370,8 +371,6 @@ body:not([data-ds-dark-theme]) [data-chat-flow] {
 /* ── 3 · 输入卡 ──────────────────────────────────────────────────── */
 [data-composer-card] {
   background: rgba(28,22,34,0.72) !important;
-  backdrop-filter: blur(16px) saturate(1.15);
-  -webkit-backdrop-filter: blur(16px) saturate(1.15);
   border: 1px solid rgba(240,200,140,0.20) !important;
   border-radius: 18px !important;
 }
@@ -433,8 +432,6 @@ body:not([data-ds-dark-theme]) [data-chat-flow] { text-shadow: 0 1px 2px rgba(25
   /* 侧边栏底色被 ._1tdjgG_sidebarCol 与 .IrIWsq_root 各画一次，叠加后
      比主区域实得多；这里给侧边栏加一层毛玻璃，既统一质感，也让压在
      人物上的文字背景更均匀。 */
-  backdrop-filter: blur(14px) saturate(1.1);
-  -webkit-backdrop-filter: blur(14px) saturate(1.1);
 }
 
 /* ── 5 · 品牌标识：自绘金鱼替换默认 mark ──────────────────────────

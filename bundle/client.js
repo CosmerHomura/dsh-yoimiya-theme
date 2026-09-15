@@ -332,10 +332,22 @@ body::before {
   filter: brightness(${WALL_BRIGHT}) saturate(1.06);
 }
 
+/* 进入对话后退让（settling 与 active 同处理，避免首条消息时回弹）。
+   只降不透明度、不做 transform：宽幅图 cover 已铺满，缩放会在边缘露出
+   下层程序化天空，看着像 bug。这是第一版的行为，实测长对话下观感更稳。 */
+body[data-ds-dark-theme]:has([data-phase="active"])::before,
+body[data-ds-dark-theme]:has([data-phase="settling"])::before {
+  opacity: .34;
+}
+body:not([data-ds-dark-theme]):has([data-phase="active"])::before,
+body:not([data-ds-dark-theme]):has([data-phase="settling"])::before {
+  opacity: .28;
+}
+
 /* 亮档：立绘是dusk 色调，加一层和纸洗色，让它像印在纸上而不是贴在屏幕上 */
 body:not([data-ds-dark-theme])::before {
-  opacity: ${WALL_OPACITY * 0.85};
-  filter: sepia(.10) saturate(.94) brightness(1.18) contrast(.94);
+  opacity: ${WALL_OPACITY * 0.52};
+  filter: sepia(.22) saturate(.84) brightness(1.07) contrast(.96);
 }
 
 
@@ -343,7 +355,7 @@ body:not([data-ds-dark-theme])::before {
    [data-chat-flow] 是 ChatView 的消息列容器（整段对话，非单条）。
    只叠一层 backdrop-filter，不做多层，避免视觉噪声与合成开销。 */
 [data-chat-flow] {
-  background: rgba(20,17,28,0.30);
+  background: rgba(20,17,28,0.60);
   backdrop-filter: blur(10px) saturate(1.15);
   -webkit-backdrop-filter: blur(10px) saturate(1.15);
   border: 1px solid rgba(240,200,140,0.10);
@@ -351,7 +363,7 @@ body:not([data-ds-dark-theme])::before {
   padding: 14px 16px 22px;
 }
 body:not([data-ds-dark-theme]) [data-chat-flow] {
-  background: rgba(255,252,246,0.58);
+  background: rgba(255,252,246,0.74);
   border-color: rgba(120,80,40,0.12);
 }
 
@@ -379,18 +391,29 @@ body:not([data-ds-dark-theme]) [data-composer-card] {
 /* 占位文案配色：硬编码值，verify.mjs 会按卡片底面核算，须 >=4.5:1。 */
 [data-composer-placeholder] { color: #9C9184 !important; }
 body:not([data-ds-dark-theme]) [data-composer-placeholder] { color: #7C6A56 !important; }
-/* ── 3 · 首页 hero 专用遮罩（body::after）─────────────────────────
-   只作用于首页，对话中完全不压——这是第一版的构图，也解决了标题可读性：
-   人物在左、DSH 标题居中，壁纸里那几道亮度 255 的光柱会让标题读不出来。
-   所以左侧几乎不压（保住人物），38% 起快速加深（给标题让出暗底）。
-   对话态不套这层：正文的可读性由会话卡自身承担，背景保持全亮通透。 */
-body:has([data-phase="hero"])::after {
+/* ── 3 · 阅读遮罩（body::after）───────────────────────────────────
+   两副面孔，按 DSH 自己发布的 data-phase 切换（取值 hero / active /
+   settling；输入框上也有 data-phase 但取值不相交，所以按值匹配不会误命中）：
+     首页 hero          左轻右重的横向渐变——人物在左几乎不压，
+                        38% 起快速加深，给居中标题让出暗底
+     对话 active/settling 中心椭圆——压住正文背后的亮度方差
+   这是第一版的构图，也是本主题可读性的第一道保障：不要为了「更透」把它
+   删掉，正文背后一旦出现亮度 255 的光柱，浅色正文就会读不出来。 */
+body::after {
   content: '';
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
   background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center center;
+}
+body[data-ds-dark-theme]::after {
+  background-image: radial-gradient(ellipse 72% 60% at 50% 46%, rgba(12,10,18,${a(0.90)}) 0%, rgba(12,10,18,${a(0.62)}) 55%, rgba(12,10,18,0) 100%);
+}
+body:not([data-ds-dark-theme])::after {
+  background-image: radial-gradient(ellipse 74% 62% at 50% 46%, rgba(255,252,246,${a(0.95)}) 0%, rgba(255,252,246,${a(0.60)}) 58%, rgba(255,252,246,0) 100%);
 }
 body[data-ds-dark-theme]:has([data-phase="hero"])::after {
   background-image: linear-gradient(96deg, rgba(12,10,18,${a(0.06)}) 0%, rgba(12,10,18,${a(0.12)}) 24%, rgba(12,10,18,${a(0.46)}) 34%, rgba(12,10,18,${a(0.75)}) 40%, rgba(12,10,18,${a(0.87)}) 52%, rgba(12,10,18,${a(0.89)}) 100%);
